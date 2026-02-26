@@ -121,6 +121,8 @@ Teammates operate under a **least-privilege model**. They start with minimum per
 | TM-20 | The teammate MUST be able to approve (graceful exit) or reject (with explanation) the shutdown request. |
 | TM-21 | Teammates MUST finish their current in-progress operation before shutting down. |
 
+If a teammate does not exit gracefully within a configurable timeout after shutdown is requested, the Lead MAY force terminate the subprocess.
+
 ---
 
 ### 3.3 Task Management
@@ -150,7 +152,7 @@ Teammates operate under a **least-privilege model**. They start with minimum per
 | TS-9 | The lead MUST be able to explicitly assign a task to a specific teammate. |
 | TS-10 | Teammates request task claims via the Lead. The Lead performs the atomic claim operation to prevent race conditions. |
 | TS-11 | Teammates MUST only work on tasks assigned to them within the current sprint. When a teammate completes all assigned tasks, it MUST remain idle until the next sprint begins. |
-| TS-12 | Task claiming MUST use the Lead coordination (or equivalent mechanism) to prevent race conditions when multiple teammates attempt to claim the same task simultaneously. |
+| TS-12 | Task claiming MUST be mediated by the Lead. Teammates request task claims via the Lead, and the Lead performs the atomic claim operation to prevent race conditions when multiple teammates attempt to claim the same task simultaneously. |
 
 #### 3.3.4 Task Complexity Estimation
 
@@ -185,19 +187,72 @@ Each teammate has a capacity of **4 weight points** per iteration (sprint). This
 | TS-18 | If a task is estimated as XL, the lead SHOULD consider whether it can be decomposed into smaller tasks before assigning it. |
 | TS-19 | Tasks SHOULD be self-contained units that produce a clear deliverable (a function, a test file, a review). |
 
+The Lead MUST reject any assignment that exceeds the teammate's sprint capacity (maximum 4 weight points).
+
+#### 3.3.5 Sprint Lifecycle
+
+Each team operates in discrete sprints (iterations).
+
+**Sprint Definition**
+
+A sprint:
+
+- Begins when the Lead selects a set of tasks and initiates planning poker.
+- Includes estimation, assignment, and execution.
+- Ends when all tasks assigned for that sprint are completed.
+
+**Sprint State File**
+
+Sprint state MUST be stored at:
+
+    ~/.copilot/teams/sprint.md
+
+Each sprint MUST be recorded as an append-only section with the following structure:
+
+    Sprint #[Number]
+    Status: planning | active | closed
+    StartedAt: [timestamp]
+    ClosedAt: [timestamp or null]
+
+    [Teammate] - [Task ID] - [Task Title] - [Estimate]
+
+Sprint sections MUST NOT be modified once closed.
+
+The Lead is the only process allowed to append to this file.
+
 ---
 
 ### 3.4 Communication
+
+The user MUST communicate only with the Team Lead. Direct user-to-teammate control is not permitted. The Lead remains the sole authority for coordination, approvals, and state mutation.
 
 #### 3.4.1 Messaging
 
 | ID | Requirement |
 |----|-------------|
 | CM-1 | The system MUST provide a mailbox-based messaging mechanism for inter-agent communication. |
-| CM-2 | Any team member MUST be able to send a **message** to one specific teammate (point-to-point). |
-| CM-3 | Any team member MUST be able to **broadcast** a message to all teammates simultaneously. |
+| CM-2 | Any team member MUST be able to request the Team Lead to send a message to a specific teammate. |
+| CM-3 | Any team member MUST be able to request the Team Lead to broadcast a message to all teammates. |
 | CM-4 | Broadcast SHOULD be used sparingly; the system SHOULD warn that costs scale with team size. |
 | CM-5 | Messages MUST be delivered automatically to recipients. The lead MUST NOT need to poll for updates. |
+
+All messages are written by the Lead. Messaging is append-only.
+
+**Mailbox Storage**
+
+Messages MUST be stored at:
+
+    ~/.copilot/teams/messages.md
+
+Each message entry MUST include:
+
+- Timestamp
+- Message ID (monotonic counter)
+- From ID
+- To ID (or BROADCAST)
+- Message body
+
+Messages MUST be append-only.
 
 #### 3.4.2 Notifications
 
@@ -206,13 +261,13 @@ Each teammate has a capacity of **4 weight points** per iteration (sprint). This
 | CM-6 | When a teammate finishes and goes idle, it MUST automatically notify the lead. |
 | CM-7 | The lead MUST receive teammate messages automatically (push, not poll). |
 
-#### 3.4.3 User ↔ Teammate Direct Interaction
+#### 3.4.3 User ↔ Teammate Visibility
 
 | ID | Requirement |
 |----|-------------|
-| CM-8 | The user MUST be able to interact with any individual teammate directly, without going through the lead. |
-| CM-9 | In in-process mode, the user MUST be able to cycle through teammates using a keyboard shortcut (e.g., Shift+Down). |
-| CM-10 | In split-pane mode, the user MUST be able to click into a teammate's pane to interact directly. |
+| CM-8 | The user MUST be able to view any individual teammate's session output. All control and instructions MUST go through the Team Lead. |
+| CM-9 | In in-process mode, the user MUST be able to cycle through teammates using a keyboard shortcut (e.g., Shift+Down) to view their output. |
+| CM-10 | In split-pane mode, the user MUST be able to click into a teammate's pane to view their output. |
 
 ---
 
@@ -258,6 +313,8 @@ Each teammate has a capacity of **4 weight points** per iteration (sprint). This
 | PA-5 | Once approved, the teammate MUST exit plan mode and begin implementation. |
 | PA-6 | The lead makes approval decisions autonomously. The user MUST be able to influence approval criteria via prompt (e.g., "only approve plans that include test coverage"). |
 
+A teammate MAY submit at most three plan revisions per task. If three consecutive plans are rejected, the task MUST return to the backlog and be reconsidered during the next sprint planning. The teammate MAY remain idle for the remainder of the sprint.
+
 ---
 
 ### 3.7 Quality Gates (Hooks)
@@ -289,6 +346,23 @@ Each teammate has a capacity of **4 weight points** per iteration (sprint). This
 | NF-5 | The system SHOULD guide the lead to partition work so that each teammate owns a different set of files, avoiding same-file edit conflicts. |
 | NF-6 | Two teammates SHOULD NOT edit the same file. The system SHOULD detect and warn about potential file conflicts. |
 
+**File Conflict Detection (Lead-Mediated)**
+
+File coordination MUST be stored at:
+
+    ~/.copilot/teams/files.md
+
+Each entry MUST follow:
+
+    [Timestamp] [TeammateID] [TaskID] [FilePath] [Status: in-use | free]
+
+Rules:
+
+- Teammates MUST request file claims via the Lead.
+- The Lead MUST deny claims if another teammate currently holds an active "in-use" lease.
+- File status changes MUST be recorded as new appended entries.
+- Prior entries MUST NOT be modified.
+
 ### 4.3 Resilience
 
 | ID | Requirement |
@@ -296,6 +370,8 @@ Each teammate has a capacity of **4 weight points** per iteration (sprint). This
 | NF-7 | If a teammate crashes or stops on an error, the lead MUST be notified. |
 | NF-8 | The user MUST be able to give a stopped teammate additional instructions or spawn a replacement. |
 | NF-9 | The system SHOULD handle orphaned processes gracefully (e.g., orphaned tmux sessions after unclean shutdown). |
+
+Each teammate MUST run as a subprocess managed by the Lead process, enabling crash detection and forced termination if required.
 
 ### 4.4 Local-Only Operation
 
