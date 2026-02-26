@@ -40,7 +40,7 @@ The easiest way to use copilot-teams is through GitHub Copilot CLI's MCP integra
 
 Add the MCP server to your Copilot CLI config:
 
-**Option A — Repo-level** (`.copilot/mcp.json` in your project):
+**Option A — Repo-level** (`.copilot/mcp-config.json` in your project):
 
 ```json
 {
@@ -53,7 +53,7 @@ Add the MCP server to your Copilot CLI config:
 }
 ```
 
-**Option B — User-level** (`~/.copilot/mcp.json`):
+**Option B — User-level** (`~/.copilot/mcp-config.json`):
 
 ```json
 {
