@@ -619,7 +619,7 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 **Requirement IDs:** QG-1, QG-2, QG-3, QG-4
 
-- [ ] Define hook interface:
+- [x] Define hook interface:
   ```ts
   {
     event: "TeammateIdle" | "TaskCompleted";
@@ -627,28 +627,28 @@ Before any feature work, establish the project structure, tooling, and shared in
     workingDir?: string;
   }
   ```
-- [ ] Implement hook configuration loading:
+- [x] Implement hook configuration loading:
   - Read from project's existing Copilot CLI hook configuration (QG-4)
   - Support per-project and global hooks
-- [ ] Implement `runHook(event, context)`:
+- [x] Implement `runHook(event, context)`:
   - Execute configured command for the event
   - Pass context as environment variables or JSON stdin
   - Capture exit code and stdout/stderr
-- [ ] Implement `TeammateIdle` hook (QG-2):
+- [x] Implement `TeammateIdle` hook (QG-2):
   - Triggered when a teammate is about to go idle
   - Exit code 2 → send stdout as feedback to teammate, keep it working
   - Other exit codes → proceed with idle state
-- [ ] Implement `TaskCompleted` hook (QG-3):
+- [x] Implement `TaskCompleted` hook (QG-3):
   - Triggered when a task is being marked complete
   - Exit code 2 → prevent completion, send stdout as feedback
   - Other exit codes → allow completion
-- [ ] Write unit tests:
-  - [ ] Hook configuration is loaded from project config
-  - [ ] `TeammateIdle` hook with exit code 2 sends feedback and prevents idle
-  - [ ] `TeammateIdle` hook with exit code 0 allows idle
-  - [ ] `TaskCompleted` hook with exit code 2 prevents completion
-  - [ ] `TaskCompleted` hook with exit code 0 allows completion
-  - [ ] Hook receives correct context (teammate name, task info)
+- [x] Write unit tests:
+  - [x] Hook configuration is loaded from project config
+  - [x] `TeammateIdle` hook with exit code 2 sends feedback and prevents idle
+  - [x] `TeammateIdle` hook with exit code 0 allows idle
+  - [x] `TaskCompleted` hook with exit code 2 prevents completion
+  - [x] `TaskCompleted` hook with exit code 0 allows completion
+  - [x] Hook receives correct context (teammate name, task info)
 
 ---
 
