@@ -506,23 +506,23 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 **Requirement IDs:** DM-1, DM-2, DM-3, DM-4, DM-5, CM-9
 
-- [ ] Implement `InProcessDisplay` class:
+- [x] Implement `InProcessDisplay` class:
   - Manages rendering of multiple teammate outputs in a single terminal
   - Tracks which teammate is currently "focused"
   - Uses `process.stdin` raw mode for key capture
-- [ ] Implement keyboard navigation:
+- [x] Implement keyboard navigation:
   - `Shift+Down`: cycle to next teammate; wrap to lead after last (DM-2, CM-9)
   - `Enter`: view focused teammate's session (DM-3)
   - `Escape`: interrupt focused teammate's current turn (DM-3)
   - `Ctrl+T`: toggle task list overlay (DM-4)
-- [ ] Implement status bar showing all teammates and their statuses
-- [ ] Implement task list overlay view (toggled by `Ctrl+T`)
-- [ ] Ensure no external dependencies for in-process mode (DM-5) — only built-in terminal APIs
-- [ ] Write unit tests:
-  - [ ] Cycling advances focus to next teammate
-  - [ ] Cycling wraps from last teammate to lead
-  - [ ] Task list toggle shows/hides overlay
-  - [ ] No external terminal tools required (no tmux, no iTerm2)
+- [x] Implement status bar showing all teammates and their statuses
+- [x] Implement task list overlay view (toggled by `Ctrl+T`)
+- [x] Ensure no external dependencies for in-process mode (DM-5) — only built-in terminal APIs
+- [x] Write unit tests:
+  - [x] Cycling advances focus to next teammate
+  - [x] Cycling wraps from last teammate to lead
+  - [x] Task list toggle shows/hides overlay
+  - [x] No external terminal tools required (no tmux, no iTerm2)
 
 ---
 
