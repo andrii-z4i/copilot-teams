@@ -418,36 +418,36 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 **Requirement IDs:** TS-13, TS-14, TS-15, TS-16, TS-17, TS-18, TS-19
 
-- [ ] Define complexity weights constant:
+- [x] Define complexity weights constant:
   ```ts
   const COMPLEXITY_WEIGHTS = { S: 1, M: 1.33, L: 2, XL: 4 };
   const CAPACITY_PER_ITERATION = 4;
   ```
-- [ ] Implement `startPlanningPoker(teamName, taskIds)`:
+- [x] Implement `startPlanningPoker(teamName, taskIds)`:
   - Lead sends estimation request to all teammates (TS-15)
   - Each teammate submits estimate independently
   - Estimates are hidden until all submitted (prevent anchoring) (TS-15)
-- [ ] Implement `submitEstimate(teamName, taskId, teammateName, size)`:
+- [x] Implement `submitEstimate(teamName, taskId, teammateName, size)`:
   - Validate size is S/M/L/XL
   - Store in temporary estimates file (hidden from other teammates)
-- [ ] Implement `resolveEstimates(teamName, taskId)`:
+- [x] Implement `resolveEstimates(teamName, taskId)`:
   - Collect all estimates
   - Pick mode (most frequent); on tie, pick higher size (TS-14)
   - Assign resolved complexity to task (TS-13)
-- [ ] Implement `calculateTeammateLoad(teamName, teammateName): number`:
+- [x] Implement `calculateTeammateLoad(teamName, teammateName): number`:
   - Sum weights of all `in_progress` + assigned tasks for the teammate
-- [ ] Implement `balanceAssignments(teamName)`:
+- [x] Implement `balanceAssignments(teamName)`:
   - Distribute pending tasks across teammates evenly by weight (TS-17)
   - Ensure no teammate exceeds 4 points per iteration (TS-16)
   - Flag XL tasks for potential decomposition (TS-18)
-- [ ] Write unit tests:
-  - [ ] Tasks without complexity size cannot be assigned (TS-13)
-  - [ ] Planning poker resolves to mode of estimates
-  - [ ] Tie-breaking picks higher size
-  - [ ] Teammate cannot see others' estimates before all submitted
-  - [ ] Capacity limit of 4 points is enforced
-  - [ ] Balance algorithm distributes weight evenly
-  - [ ] XL task triggers decomposition suggestion
+- [x] Write unit tests:
+  - [x] Tasks without complexity size cannot be assigned (TS-13)
+  - [x] Planning poker resolves to mode of estimates
+  - [x] Tie-breaking picks higher size
+  - [x] Teammate cannot see others' estimates before all submitted
+  - [x] Capacity limit of 4 points is enforced
+  - [x] Balance algorithm distributes weight evenly
+  - [x] XL task triggers decomposition suggestion
 
 ---
 
