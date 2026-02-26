@@ -78,8 +78,10 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 - [ ] Implement `resolvePath(teamName, ...segments)` that returns well-known paths:
   - Team config: `~/.copilot/teams/{team-name}/config.json`
-  - Task list: `~/.copilot/tasks/{team-name}/backlog.md`
-  - Mailbox: `~/.copilot/teams/{team-name}/mailbox/`
+  - Task list: `~/.copilot/teams/{team-name}/backlog.md`
+  - Messages: `~/.copilot/teams/{team-name}/messages.md`
+  - Sprint state: `~/.copilot/teams/{team-name}/sprint.md`
+  - File claims: `~/.copilot/teams/{team-name}/files.md`
   - Permission audit log: `~/.copilot/teams/{team-name}/permission-audit.log`
 - [ ] Implement `ensureDir(path)` — create directory tree if not exists
 - [ ] Implement `atomicWriteFile(path, content)` — write-to-temp then rename (prevents partial reads)
@@ -145,14 +147,13 @@ Before any feature work, establish the project structure, tooling, and shared in
   - Load team config
   - Assert caller is the lead
   - Check all teammates are stopped (TL-7); error with list of still-running teammates if not
-  - Remove team config directory (`~/.copilot/teams/{team-name}/`)
-  - Remove task list directory (`~/.copilot/tasks/{team-name}/`)
+  - Remove team directory (`~/.copilot/teams/{team-name}/`) including config, task list, messages, sprint state, file claims, and permission audit log
   - Return success/failure result
 - [ ] Implement `areAllTeammatesStopped(teamConfig): boolean` — check process status of each teammate
 - [ ] Write unit tests:
   - [ ] Cleanup succeeds when all teammates are stopped
   - [ ] Cleanup fails with clear error listing running teammates
-  - [ ] Cleanup removes config, task list, and mailbox directories
+  - [ ] Cleanup removes entire team directory (config, backlog, messages, sprint, files, audit log)
   - [ ] Non-lead cannot clean up team
 
 ---
@@ -161,50 +162,49 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 ### R5: Mailbox Messaging System
 
-**Goal:** Implement the file-based mailbox for point-to-point and broadcast messaging between team members.
+**Goal:** Implement the append-only, Lead-mediated messaging system for inter-agent communication. The Team Lead is the **only writer** to the messages file (single-writer coordination invariant). Teammates request the Lead to send messages on their behalf.
 
 **Requirement IDs:** CM-1, CM-2, CM-3, CM-4, CM-5, CM-6, CM-7
 
-- [ ] Define `Message` interface:
-  ```ts
-  {
-    id: string;
-    from: string;        // sender name/ID
-    to: string | "all";  // recipient or "all" for broadcast
-    type: "message" | "notification" | "permission_request" | "permission_response" | "shutdown_request" | "shutdown_response" | "plan_approval_request" | "plan_approval_response";
-    payload: object;
-    timestamp: string;
-    read: boolean;
-  }
+- [ ] Define message entry format (matching requirements):
   ```
-- [ ] Implement mailbox storage structure:
+  [Timestamp] [MessageID] [FromID] [ToID|BROADCAST] [Body]
   ```
-  ~/.copilot/teams/{team-name}/mailbox/
-    {recipient-name}/
-      {message-id}.json
-  ```
-- [ ] Implement `sendMessage(teamName, message)`:
-  - Validate sender and recipient are team members
-  - If `to === "all"`, write to every member's mailbox (broadcast)
-  - If broadcast, log a cost warning (CM-4)
-  - Use atomic write to prevent partial reads
-- [ ] Implement `readMessages(teamName, recipientName, opts?)`:
-  - Read all unread messages from recipient's mailbox directory
-  - Support filtering by type, sender
-  - Mark messages as read
+  - Message ID: monotonic counter (incrementing integer)
+  - To: specific teammate ID or `BROADCAST`
+- [ ] Implement message storage:
+  - Single append-only file: `~/.copilot/teams/{team-name}/messages.md`
+  - Only the Lead appends entries; teammates MUST NOT write to this file
+- [ ] Implement `appendMessage(teamName, from, to, body)` (Lead-only):
+  - Validate caller is the Lead (enforce single-writer invariant)
+  - Assign next monotonic message ID
+  - Append formatted entry to `messages.md`
+  - Use file locking to ensure atomic append
+- [ ] Implement teammate message request flow:
+  - Teammates request the Lead to send a message (CM-2, CM-3)
+  - The Lead validates the request and calls `appendMessage` on their behalf
+- [ ] Implement `readMessages(teamName, recipientId, sinceId?)`:
+  - Parse `messages.md` and filter by recipient (direct or BROADCAST)
+  - Support reading only messages after a given ID (cursor-based)
+  - Available to all team members (read-only)
+- [ ] Implement broadcast support:
+  - When `to === "BROADCAST"`, the message is visible to all members (CM-3)
+  - Log a cost warning when broadcasting to large teams (CM-4)
 - [ ] Implement file-watcher–based push delivery (CM-5, CM-7):
-  - Use `fs.watch` or `chokidar` on mailbox directory
-  - On new file, trigger callback with parsed message
-  - Lead must receive messages automatically (push, not poll)
-- [ ] Implement `broadcastCostWarning(teamSize)` — warn if team > N members (CM-4)
-- [ ] Implement `notifyLeadIdle(teamName, teammateName)` — auto-notification when teammate finishes (CM-6)
+  - Use `fs.watch` or `chokidar` on `messages.md`
+  - On file change, parse new entries and trigger callbacks for recipients
+  - Lead receives messages automatically (push, not poll) (CM-7)
+- [ ] Implement `notifyLeadIdle(teamName, teammateName)` — teammate requests Lead to record idle notification (CM-6)
 - [ ] Write unit tests:
-  - [ ] Point-to-point message is delivered to correct recipient's mailbox
-  - [ ] Broadcast message is delivered to all members except sender
+  - [ ] Only the Lead can append messages (single-writer invariant enforced)
+  - [ ] Teammate message request is mediated by the Lead
+  - [ ] Point-to-point message is visible to correct recipient
+  - [ ] Broadcast message is visible to all members
   - [ ] Broadcast triggers cost warning for large teams
-  - [ ] `readMessages` returns only unread messages
+  - [ ] `readMessages` with cursor returns only messages after given ID
   - [ ] File watcher triggers callback on new message
-  - [ ] Idle notification is sent to lead when teammate finishes
+  - [ ] Idle notification is recorded when teammate finishes
+  - [ ] Messages file is append-only (no deletions or modifications)
 
 ---
 
@@ -274,12 +274,13 @@ Before any feature work, establish the project structure, tooling, and shared in
   }
   ```
 - [ ] Implement `requestPermission(teamName, request)`:
-  - Send permission request message to lead via mailbox (TM-9)
-  - Block teammate execution until response is received (TM-16)
+  - Teammate requests the Lead to record the permission request (TM-9)
+  - The Lead writes the request to the messaging system on the teammate's behalf
+  - Teammate blocks until the Lead responds (TM-16)
   - Return approval/denial result
 - [ ] Implement `reviewPermission(teamName, requestId, decision, rationale?)`:
   - Validate lead has sufficient permissions (TM-8)
-  - Send response to requesting teammate via mailbox (TM-10)
+  - Lead records response via messaging system (TM-10)
   - Log to permission audit log (TM-13)
 - [ ] Implement permission enforcement at teammate level:
   - Intercept privileged operations (file write, shell exec, API calls)
@@ -290,6 +291,7 @@ Before any feature work, establish the project structure, tooling, and shared in
   - File: `~/.copilot/teams/{team-name}/permission-audit.log`
   - Format: one JSON line per entry with timestamp, teammate, operation, target, decision, rationale (TM-14)
   - Append-only; teammates cannot modify or truncate (TM-15)
+  - Only the Lead and the user may read the audit log; teammates MUST NOT read it (TM-15)
   - Expose `readAuditLog(teamName)` for user review (TM-17)
 - [ ] Write unit tests:
   - [ ] Teammate starts with minimum permissions (no inherited elevation)
@@ -311,7 +313,7 @@ Before any feature work, establish the project structure, tooling, and shared in
 **Requirement IDs:** TM-18, TM-19, TM-20, TM-21
 
 - [ ] Implement `requestShutdown(teamName, teammateName)`:
-  - Send shutdown request message to target teammate via mailbox (TM-19)
+  - Lead sends shutdown request to target teammate via messaging system (TM-19)
   - Wait for response (approve/reject)
 - [ ] Implement `handleShutdownRequest(teamName)` (teammate-side):
   - If no in-progress operation: approve and begin graceful exit (TM-20)
@@ -333,7 +335,7 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 ### R9: Task List & Task States
 
-**Goal:** Implement the shared, persistent task list with state management and dependency tracking.
+**Goal:** Implement the shared, persistent task list with state management and dependency tracking. The Lead is the **only writer** to the task list (single-writer coordination invariant).
 
 **Requirement IDs:** TS-1, TS-2, TS-3, TS-4, TS-5, TS-6, TS-7, TS-8
 
@@ -353,7 +355,7 @@ Before any feature work, establish the project structure, tooling, and shared in
   ```
 - [ ] Define `TaskList` (backlog) serialization format in Markdown:
   - Human-readable markdown with YAML frontmatter per task
-  - Stored at `~/.copilot/tasks/{team-name}/backlog.md`
+  - Stored at `~/.copilot/teams/{team-name}/backlog.md`
 - [ ] Implement `createTask(teamName, task)` — lead-only, add task to backlog (TS-4)
 - [ ] Implement `updateTask(teamName, taskId, updates)` — lead-only, update fields (TS-4)
 - [ ] Implement `deleteTask(teamName, taskId)` — lead-only (TS-4)
@@ -395,15 +397,18 @@ Before any feature work, establish the project structure, tooling, and shared in
   - Lead validates and assigns (prevents race conditions via centralized coordination)
   - Returns claimed task or null if none available
 - [ ] Implement auto-pickup after task completion (TS-11):
-  - When teammate completes a task, automatically trigger `claimNextTask`
-  - Skip if no unassigned, unblocked pending tasks remain
+  - When teammate completes a task, check if there are more assigned tasks for this teammate in the current sprint
+  - If yes, automatically pick up the next assigned task
+  - If no assigned tasks remain, teammate MUST remain idle until the next sprint begins (TS-11)
+  - Teammates MUST NOT claim unassigned tasks on their own — only work on tasks assigned within the current sprint
 - [ ] Write unit tests:
   - [ ] Lead can assign a pending, unblocked task to a teammate
   - [ ] Assignment fails for blocked tasks
   - [ ] Teammate claim request goes through lead coordination
   - [ ] Two simultaneous claims do not result in double-assignment
-  - [ ] Auto-pickup triggers after task completion
-  - [ ] Auto-pickup returns null when no tasks available
+  - [ ] Auto-pickup triggers for next assigned sprint task after task completion
+  - [ ] Teammate goes idle when no more assigned sprint tasks remain
+  - [ ] Teammate does NOT claim unassigned tasks outside its sprint assignment
 
 ---
 
@@ -446,9 +451,56 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 ---
 
+### R12: Sprint Lifecycle Management
+
+**Goal:** Implement discrete sprint cycles with planning, execution, and closure phases. The Lead is the only writer to the sprint state file.
+
+**Requirement IDs:** TS-11, §3.3.5 (Sprint Lifecycle)
+
+- [ ] Define sprint states: `planning`, `active`, `closed`
+- [ ] Implement sprint state file at `~/.copilot/teams/{team-name}/sprint.md`:
+  - Append-only format — each sprint is a new section:
+    ```
+    Sprint #[Number]
+    Status: planning | active | closed
+    StartedAt: [timestamp]
+    ClosedAt: [timestamp or null]
+
+    [Teammate] - [Task ID] - [Task Title] - [Estimate]
+    ```
+  - Closed sprint sections MUST NOT be modified
+  - Only the Lead may append to this file (single-writer invariant)
+- [ ] Implement `startSprint(teamName, sprintNumber)`:
+  - Lead selects tasks from backlog for the sprint
+  - Initiates planning poker for estimation (integrates with R11)
+  - Sets sprint status to `planning`
+- [ ] Implement `activateSprint(teamName, sprintNumber)`:
+  - After estimation and assignment are complete, transition to `active`
+  - Teammates begin working on assigned tasks
+- [ ] Implement `closeSprint(teamName, sprintNumber)`:
+  - Triggered when all tasks assigned for the sprint are completed
+  - Set sprint status to `closed` with closing timestamp
+  - Unfinished tasks return to backlog for next sprint
+- [ ] Implement `getCurrentSprint(teamName)`:
+  - Parse `sprint.md` and return the latest non-closed sprint
+  - Return null if no active sprint
+- [ ] Implement sprint constraint enforcement:
+  - Teammates MUST only work on tasks assigned within the current sprint (TS-11)
+  - When a teammate completes all assigned sprint tasks, it remains idle until next sprint
+- [ ] Write unit tests:
+  - [ ] Sprint file is created with correct format
+  - [ ] Sprint transitions: planning → active → closed
+  - [ ] Closed sprint sections are immutable (append-only)
+  - [ ] Only Lead can write to sprint file
+  - [ ] `getCurrentSprint` returns active sprint
+  - [ ] Teammate cannot work on tasks outside current sprint
+  - [ ] Sprint closure returns unfinished tasks to backlog
+
+---
+
 ## Phase 6: Display Modes
 
-### R12: In-Process Display Mode
+### R13: In-Process Display Mode
 
 **Goal:** Implement the in-process mode where all teammates run in a single terminal with keyboard navigation.
 
@@ -474,7 +526,7 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 ---
 
-### R13: Split-Pane Display Mode
+### R14: Split-Pane Display Mode
 
 **Goal:** Implement split-pane mode for tmux and iTerm2, where each teammate gets its own pane.
 
@@ -492,7 +544,7 @@ Before any feature work, establish the project structure, tooling, and shared in
   - Check iTerm2 env vars / `it2` availability (DM-9)
   - Return detected environment type
 - [ ] All panes visible simultaneously (DM-7)
-- [ ] User can click into a pane to interact directly with that teammate (CM-10)
+- [ ] User can click into a pane to view that teammate's output (CM-10)
 - [ ] Write unit tests:
   - [ ] tmux panes are created correctly for N teammates
   - [ ] iTerm2 panes are created via `it2` CLI
@@ -501,7 +553,7 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 ---
 
-### R14: Display Mode Selection
+### R15: Display Mode Selection
 
 **Goal:** Implement the auto-detection and override logic for choosing display mode.
 
@@ -524,7 +576,7 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 ## Phase 7: Plan Approval Workflow
 
-### R15: Plan Approval
+### R16: Plan Approval
 
 **Goal:** Implement the plan-then-implement workflow where teammates produce plans for lead review before coding.
 
@@ -535,26 +587,33 @@ Before any feature work, establish the project structure, tooling, and shared in
   - In plan mode, teammate can explore code and produce a plan but MUST NOT modify files
   - Plan is stored as a structured document (Markdown)
 - [ ] Implement `submitPlanForApproval(teamName, teammateName, plan)`:
-  - Teammate sends plan approval request to lead via mailbox (PA-2)
+  - Teammate requests the Lead to record the plan approval request (PA-2)
   - Teammate blocks, awaiting response
 - [ ] Implement `reviewPlan(teamName, requestId, decision, feedback?)`:
   - Lead approves → teammate exits plan mode and begins implementation (PA-5)
   - Lead rejects → teammate receives feedback, stays in plan mode, revises (PA-4)
+- [ ] Implement plan revision limit:
+  - Track revision count per task per teammate
+  - A teammate MAY submit at most **3 plan revisions** per task
+  - If 3 consecutive plans are rejected, the task MUST return to the backlog and be reconsidered during next sprint planning
+  - The teammate MAY remain idle for the remainder of the sprint
 - [ ] Implement lead approval criteria customization:
   - User can set approval criteria via prompt to the lead (PA-6)
   - Lead uses criteria to make autonomous approval/rejection decisions
 - [ ] Write unit tests:
   - [ ] Teammate in plan mode cannot write files
-  - [ ] Plan approval request is sent via mailbox
+  - [ ] Plan approval request is mediated by the Lead
   - [ ] Approved plan transitions teammate to implementation mode
   - [ ] Rejected plan keeps teammate in plan mode with feedback
+  - [ ] After 3 rejections, task returns to backlog
+  - [ ] After 3 rejections, teammate goes idle for remainder of sprint
   - [ ] Lead can apply custom approval criteria
 
 ---
 
 ## Phase 8: Quality Gates (Hooks)
 
-### R16: Lifecycle Hooks
+### R17: Lifecycle Hooks
 
 **Goal:** Implement hook system for `TeammateIdle` and `TaskCompleted` lifecycle events.
 
@@ -593,28 +652,31 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 ---
 
-## Phase 9: User ↔ Teammate Direct Interaction
+## Phase 9: User ↔ Teammate Visibility
 
-### R17: Direct User-Teammate Communication
+### R18: User-Teammate Visibility
 
-**Goal:** Allow the user to interact with any teammate directly without going through the lead.
+**Goal:** Allow the user to **view** any teammate's session output. All control and instructions MUST go through the Team Lead — the user MUST NOT communicate directly with teammates.
 
 **Requirement IDs:** CM-8, CM-9, CM-10
 
-- [ ] Implement `directInteract(teammateName)`:
-  - In-process mode: focus switches to teammate; user types directly to its session (CM-9)
-  - Split-pane mode: user clicks into the pane (native behavior) (CM-10)
-- [ ] Ensure direct interaction does not disrupt the lead or other teammates
-- [ ] Ensure teammate can receive both lead messages and user input
+- [ ] Implement read-only teammate output viewing:
+  - In-process mode: user cycles through teammates using `Shift+Down` to view their output (CM-9)
+  - Split-pane mode: user clicks into a teammate's pane to view their output (CM-10)
+  - Viewing is **read-only** — user cannot type input directly to teammates
+- [ ] All control and instructions to teammates MUST go through the Team Lead (§3.4):
+  - User communicates with the Lead
+  - The Lead relays instructions to teammates via the messaging system
 - [ ] Write unit tests:
-  - [ ] In-process mode focus switch routes input to correct teammate
-  - [ ] Direct interaction does not affect lead's mailbox or state
+  - [ ] In-process mode cycling allows viewing teammate output
+  - [ ] User cannot send direct input to a teammate
+  - [ ] All instructions to teammates are routed through the Lead
 
 ---
 
 ## Phase 10: Non-Functional — Resilience & Cost Awareness
 
-### R18: Token & Cost Efficiency
+### R19: Token & Cost Efficiency
 
 **Goal:** Implement cost awareness warnings and documentation.
 
@@ -631,26 +693,44 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 ---
 
-### R19: Concurrency & Conflict Avoidance
+### R20: Concurrency & Conflict Avoidance
 
-**Goal:** Implement file conflict detection and work partitioning guidance.
+**Goal:** Implement Lead-mediated file conflict detection and work partitioning guidance using the `files.md` coordination file.
 
 **Requirement IDs:** NF-4, NF-5, NF-6
 
 - [ ] File locking for task claiming — already covered in R2 (utils) and R9 (task list)
+- [ ] Implement file claims storage at `~/.copilot/teams/{team-name}/files.md`:
+  - Append-only format, each entry:
+    ```
+    [Timestamp] [TeammateID] [TaskID] [FilePath] [Status: in-use | free]
+    ```
+  - Only the Lead may write to this file (single-writer invariant)
+  - Prior entries MUST NOT be modified
+- [ ] Implement Lead-mediated file claim flow:
+  - Teammates request file claims via the Lead
+  - The Lead checks `files.md` for active "in-use" leases on the requested file
+  - The Lead MUST deny claims if another teammate currently holds an active "in-use" lease (NF-6)
+  - On approval, the Lead appends a new "in-use" entry
+  - On file release, the Lead appends a "free" entry
 - [ ] Implement `detectFileConflicts(teamName)`:
-  - Track which files each teammate is working on (via task metadata or file watchers)
+  - Parse `files.md` to identify files with active leases by multiple teammates
   - Warn if two teammates are editing or plan to edit the same file (NF-6)
 - [ ] Implement partitioning guidance:
   - Lead should suggest file ownership when assigning tasks (NF-5)
   - Include file-ownership info in task metadata
 - [ ] Write unit tests:
+  - [ ] Only Lead can write to files.md
+  - [ ] File claim is denied when another teammate holds active lease
+  - [ ] File claim is approved when no active lease exists
+  - [ ] Releasing a file appends a "free" entry
   - [ ] Conflict warning when two teammates target same file
   - [ ] No warning when teammates target different files
+  - [ ] files.md entries are append-only (no modifications)
 
 ---
 
-### R20: Resilience & Error Handling
+### R21: Resilience & Error Handling
 
 **Goal:** Handle teammate crashes, orphaned processes, and recovery.
 
@@ -687,20 +767,22 @@ R0  (Project Setup)
       │    ├─► R6  (Teammate Spawning)
       │    │    ├─► R7  (Permissions & Approval)
       │    │    ├─► R8  (Teammate Shutdown)
-      │    │    └─► R17 (Direct User-Teammate Interaction)
+      │    │    └─► R18 (User-Teammate Visibility)
       │    ├─► R10 (Task Assignment & Claiming)
-      │    ├─► R15 (Plan Approval)
-      │    └─► R20 (Resilience)
+      │    ├─► R16 (Plan Approval)
+      │    └─► R21 (Resilience)
       ├─► R9  (Task List & States)
       │    ├─► R10 (Task Assignment & Claiming)
-      │    └─► R11 (Task Complexity & Planning Poker)
-      ├─► R12 (In-Process Display)
-      ├─► R13 (Split-Pane Display)
-      └─► R14 (Display Mode Selection)
-           └─ depends on R12, R13
-R16 (Lifecycle Hooks) — depends on R6, R9
-R18 (Token & Cost) — depends on R5, R6
-R19 (Concurrency) — depends on R2, R9
+      │    ├─► R11 (Task Complexity & Planning Poker)
+      │    └─► R12 (Sprint Lifecycle)
+      │         └─ depends on R11
+      ├─► R13 (In-Process Display)
+      ├─► R14 (Split-Pane Display)
+      └─► R15 (Display Mode Selection)
+           └─ depends on R13, R14
+R17 (Lifecycle Hooks) — depends on R6, R9
+R19 (Token & Cost) — depends on R5, R6
+R20 (Concurrency & File Claims) — depends on R2, R9
 ```
 
 ---
