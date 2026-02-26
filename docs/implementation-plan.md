@@ -76,22 +76,22 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 **Requirement IDs:** NF-4, NF-10, NF-11
 
-- [ ] Implement `resolvePath(teamName, ...segments)` that returns well-known paths:
+- [x] Implement `resolvePath(teamName, ...segments)` that returns well-known paths:
   - Team config: `~/.copilot/teams/{team-name}/config.json`
   - Task list: `~/.copilot/teams/{team-name}/backlog.md`
   - Messages: `~/.copilot/teams/{team-name}/messages.md`
   - Sprint state: `~/.copilot/teams/{team-name}/sprint.md`
   - File claims: `~/.copilot/teams/{team-name}/files.md`
   - Permission audit log: `~/.copilot/teams/{team-name}/permission-audit.log`
-- [ ] Implement `ensureDir(path)` — create directory tree if not exists
-- [ ] Implement `atomicWriteFile(path, content)` — write-to-temp then rename (prevents partial reads)
-- [ ] Implement `acquireLock(path)` / `releaseLock(path)` — file-based advisory locking (e.g., `lockfile` or `proper-lockfile` package) for concurrency-safe task claiming
-- [ ] Write unit tests:
-  - [ ] Path resolution produces correct paths for various team names
-  - [ ] `ensureDir` creates nested directories
-  - [ ] `atomicWriteFile` is safe under concurrent reads
-  - [ ] Lock acquisition blocks concurrent access; lock release allows it
-  - [ ] Lock handles stale lockfiles gracefully
+- [x] Implement `ensureDir(path)` — create directory tree if not exists
+- [x] Implement `atomicWriteFile(path, content)` — write-to-temp then rename (prevents partial reads)
+- [x] Implement `acquireLock(path)` / `releaseLock(path)` — file-based advisory locking (e.g., `lockfile` or `proper-lockfile` package) for concurrency-safe task claiming
+- [x] Write unit tests:
+  - [x] Path resolution produces correct paths for various team names
+  - [x] `ensureDir` creates nested directories
+  - [x] `atomicWriteFile` is safe under concurrent reads
+  - [x] Lock acquisition blocks concurrent access; lock release allows it
+  - [x] Lock handles stale lockfiles gracefully
 
 ---
 
