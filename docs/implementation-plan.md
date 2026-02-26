@@ -46,27 +46,27 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 **Requirement IDs:** CF-1, CF-2, CF-3, CF-4, NF-10, NF-11
 
-- [ ] Define `CopilotTeamsConfig` interface:
+- [x] Define `CopilotTeamsConfig` interface:
   ```ts
   {
     enabled: boolean;
     teammateMode: "auto" | "in-process" | "tmux";
   }
   ```
-- [ ] Implement `loadConfig()` that merges (in priority order):
+- [x] Implement `loadConfig()` that merges (in priority order):
   1. CLI flags (`--teammate-mode <mode>`) — highest priority
   2. Environment variable `COPILOT_TEAMS_ENABLED` — overrides settings file for enabled/disabled
   3. Settings file (`settings.json`) — base configuration
   4. Defaults (`enabled: false`, `teammateMode: "auto"`) — lowest priority
-- [ ] Implement `isTeamsEnabled(): boolean` guard used by all entry points
-- [ ] Validate `teammateMode` values; reject invalid values with clear error message
-- [ ] Write unit tests:
-  - [ ] Default config returns `enabled: false`, `teammateMode: "auto"`
-  - [ ] Env var `COPILOT_TEAMS_ENABLED=1` enables the feature
-  - [ ] Settings file `teammateMode: "tmux"` is respected
-  - [ ] CLI flag `--teammate-mode in-process` overrides settings file
-  - [ ] Invalid `teammateMode` value produces error
-  - [ ] Feature-gated entry point rejects calls when disabled
+- [x] Implement `isTeamsEnabled(): boolean` guard used by all entry points
+- [x] Validate `teammateMode` values; reject invalid values with clear error message
+- [x] Write unit tests:
+  - [x] Default config returns `enabled: false`, `teammateMode: "auto"`
+  - [x] Env var `COPILOT_TEAMS_ENABLED=1` enables the feature
+  - [x] Settings file `teammateMode: "tmux"` is respected
+  - [x] CLI flag `--teammate-mode in-process` overrides settings file
+  - [x] Invalid `teammateMode` value produces error
+  - [x] Feature-gated entry point rejects calls when disabled
 
 ---
 
