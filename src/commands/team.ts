@@ -2,7 +2,7 @@
  * copilot-teams team — create, show, cleanup teams.
  */
 
-import { parseFlags, resolveSessionId, resolveTeamName, printKV } from './helpers.js';
+import { parseFlags, resolveSessionId, resolveTeamName, printKV, saveLastTeam } from './helpers.js';
 import { createTeam, loadTeam, cleanupTeam, getActiveTeam } from '../team/index.js';
 import { warnTeamSize } from '../utils/cost.js';
 
@@ -35,6 +35,7 @@ export async function cmdTeam(args: string[]): Promise<void> {
         leadSessionId: sessionId,
         teamName: flags['team-name'],
       });
+      saveLastTeam(team.teamName);
       console.log(`✓ Team created: ${team.teamName}`);
       console.log(`  Lead session: ${team.leadSessionId}`);
       console.log(`  Created at:   ${team.createdAt}`);

@@ -2,8 +2,13 @@
  * CLI helpers shared across commands.
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
 import crypto from 'node:crypto';
 import { getActiveTeam } from '../team/index.js';
+import { TEAMS_BASE_DIR } from '../constants.js';
+
+const LAST_TEAM_FILE = path.join(TEAMS_BASE_DIR, '.last-team');
 
 /** Parse --key value pairs from argv into a record. */
 export function parseFlags(args: string[]): { positional: string[]; flags: Record<string, string> } {
@@ -29,13 +34,53 @@ export function parseFlags(args: string[]): { positional: string[]; flags: Recor
   return { positional, flags };
 }
 
-/** Resolve team name: explicit flag > active team > error. */
+/** Save last-used team name for auto-detection. */
+export function saveLastTeam(teamName: string): void {
+  fs.mkdirSync(TEAMS_BASE_DIR, { recursive: true });
+  fs.writeFileSync(LAST_TEAM_FILE, teamName, 'utf-8');
+}
+
+/** Read last-used team name, or null. */
+function readLastTeam(): string | null {
+  try {
+    const name = fs.readFileSync(LAST_TEAM_FILE, 'utf-8').trim();
+    // Verify the team dir still exists
+    if (name && fs.existsSync(path.join(TEAMS_BASE_DIR, name, 'config.json'))) {
+      return name;
+    }
+  } catch { /* missing file */ }
+  return null;
+}
+
+/** Find the only team if exactly one exists. */
+function findSoleTeam(): string | null {
+  try {
+    const entries = fs.readdirSync(TEAMS_BASE_DIR, { withFileTypes: true });
+    const teamDirs = entries.filter(
+      e => e.isDirectory() && fs.existsSync(path.join(TEAMS_BASE_DIR, e.name, 'config.json'))
+    );
+    if (teamDirs.length === 1) return teamDirs[0].name;
+  } catch { /* missing base dir */ }
+  return null;
+}
+
+/** Resolve team name: explicit flag > session match > last-used > sole team > error. */
 export function resolveTeamName(flags: Record<string, string>): string {
   if (flags['team-name']) return flags['team-name'];
 
-  const sessionId = resolveSessionId(flags);
-  const active = getActiveTeam(sessionId);
-  if (active) return active.teamName;
+  // Try matching by session ID (only if explicitly provided)
+  if (flags['session-id']) {
+    const active = getActiveTeam(flags['session-id']);
+    if (active) return active.teamName;
+  }
+
+  // Try last-used team marker
+  const last = readLastTeam();
+  if (last) return last;
+
+  // Try sole team auto-detection
+  const sole = findSoleTeam();
+  if (sole) return sole;
 
   throw new Error(
     'No team specified and no active team found. Use --team-name or create a team first.'
