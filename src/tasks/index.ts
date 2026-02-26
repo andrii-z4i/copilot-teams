@@ -151,6 +151,43 @@ export async function createTask(
 }
 
 /**
+ * Internal: update a task without acquiring the lock.
+ * Caller MUST hold the lock on backlog.md.
+ */
+export function updateTaskInternal(
+  teamName: string,
+  taskId: string,
+  updates: Partial<Pick<Task, 'title' | 'description' | 'assignee' | 'complexity' | 'status' | 'dependencies'>>,
+): Task {
+  const tasks = readTaskList(teamName);
+  const idx = tasks.findIndex((t) => t.id === taskId);
+  if (idx === -1) {
+    throw new Error(`Task "${taskId}" not found.`);
+  }
+
+  const current = tasks[idx];
+
+  if (updates.status && updates.status !== current.status) {
+    if (!isValidTransition(current.status, updates.status)) {
+      throw new Error(
+        `Invalid state transition: ${current.status} → ${updates.status}. ` +
+          `Allowed transitions from "${current.status}": ${VALID_TRANSITIONS[current.status].join(', ') || 'none'}.`,
+      );
+    }
+  }
+
+  const updated: Task = {
+    ...current,
+    ...updates,
+    updatedAt: new Date().toISOString(),
+  };
+
+  tasks[idx] = updated;
+  writeTaskList(teamName, tasks);
+  return updated;
+}
+
+/**
  * Update an existing task (TS-4). Lead-only.
  */
 export async function updateTask(
@@ -161,33 +198,7 @@ export async function updateTask(
   const backlogPath = resolveTeamFile(teamName, 'backlog');
 
   return withLock(backlogPath, () => {
-    const tasks = readTaskList(teamName);
-    const idx = tasks.findIndex((t) => t.id === taskId);
-    if (idx === -1) {
-      throw new Error(`Task "${taskId}" not found.`);
-    }
-
-    const current = tasks[idx];
-
-    // Validate state transition if status is being changed
-    if (updates.status && updates.status !== current.status) {
-      if (!isValidTransition(current.status, updates.status)) {
-        throw new Error(
-          `Invalid state transition: ${current.status} → ${updates.status}. ` +
-            `Allowed transitions from "${current.status}": ${VALID_TRANSITIONS[current.status].join(', ') || 'none'}.`,
-        );
-      }
-    }
-
-    const updated: Task = {
-      ...current,
-      ...updates,
-      updatedAt: new Date().toISOString(),
-    };
-
-    tasks[idx] = updated;
-    writeTaskList(teamName, tasks);
-    return updated;
+    return updateTaskInternal(teamName, taskId, updates);
   });
 }
 

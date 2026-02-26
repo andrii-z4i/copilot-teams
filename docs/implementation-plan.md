@@ -387,28 +387,28 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 **Requirement IDs:** TS-9, TS-10, TS-11, TS-12
 
-- [ ] Implement `assignTask(teamName, taskId, teammateName)`:
+- [x] Implement `assignTask(teamName, taskId, teammateName)`:
   - Lead-only operation
   - Validate task is `pending` and unblocked
   - Set `assignee` and transition to `in_progress`
   - Notify assigned teammate via mailbox
-- [ ] Implement `claimNextTask(teamName, teammateName)`:
+- [x] Implement `claimNextTask(teamName, teammateName)`:
   - Teammate sends claim request to lead via mailbox (TS-10, TS-12)
   - Lead validates and assigns (prevents race conditions via centralized coordination)
   - Returns claimed task or null if none available
-- [ ] Implement auto-pickup after task completion (TS-11):
+- [x] Implement auto-pickup after task completion (TS-11):
   - When teammate completes a task, check if there are more assigned tasks for this teammate in the current sprint
   - If yes, automatically pick up the next assigned task
   - If no assigned tasks remain, teammate MUST remain idle until the next sprint begins (TS-11)
   - Teammates MUST NOT claim unassigned tasks on their own — only work on tasks assigned within the current sprint
-- [ ] Write unit tests:
-  - [ ] Lead can assign a pending, unblocked task to a teammate
-  - [ ] Assignment fails for blocked tasks
-  - [ ] Teammate claim request goes through lead coordination
-  - [ ] Two simultaneous claims do not result in double-assignment
-  - [ ] Auto-pickup triggers for next assigned sprint task after task completion
-  - [ ] Teammate goes idle when no more assigned sprint tasks remain
-  - [ ] Teammate does NOT claim unassigned tasks outside its sprint assignment
+- [x] Write unit tests:
+  - [x] Lead can assign a pending, unblocked task to a teammate
+  - [x] Assignment fails for blocked tasks
+  - [x] Teammate claim request goes through lead coordination
+  - [x] Two simultaneous claims do not result in double-assignment
+  - [x] Auto-pickup triggers for next assigned sprint task after task completion
+  - [x] Teammate goes idle when no more assigned sprint tasks remain
+  - [x] Teammate does NOT claim unassigned tasks outside its sprint assignment
 
 ---
 

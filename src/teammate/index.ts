@@ -216,6 +216,8 @@ export async function spawnTeammate(
 
   // Monitor process exit for crash detection
   child.on('exit', async (code, signal) => {
+    // If process was already unregistered (e.g., by forceShutdown), skip
+    if (!getProcess(teamName, options.name)) return;
     unregisterProcess(teamName, options.name);
     const newStatus: MemberStatus = code === 0 || signal === 'SIGTERM' ? 'stopped' : 'crashed';
     try {
