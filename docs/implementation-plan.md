@@ -103,7 +103,7 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 **Requirement IDs:** TL-1, TL-2, TL-3, TL-4, TL-5, TL-9, TL-10, TL-11
 
-- [ ] Define `TeamConfig` schema (JSON):
+- [x] Define `TeamConfig` schema (JSON):
   ```json
   {
     "teamName": "string",
@@ -114,26 +114,26 @@ Before any feature work, establish the project structure, tooling, and shared in
     ]
   }
   ```
-- [ ] Implement `generateTeamName()` — generate a unique, human-readable team name (e.g., adjective-noun-hash: `swift-falcon-a3b2`)
-- [ ] Implement `createTeam(leadSessionId, members?)`:
+- [x] Implement `generateTeamName()` — generate a unique, human-readable team name (e.g., adjective-noun-hash: `swift-falcon-a3b2`)
+- [x] Implement `createTeam(leadSessionId, members?)`:
   - Validate no active team exists for this lead session (TL-9)
   - Generate team name
   - Build `TeamConfig` with lead as first member
   - Persist config at `~/.copilot/teams/{team-name}/config.json`
   - Return created `TeamConfig`
-- [ ] Implement `loadTeam(teamName): TeamConfig` — read and parse config from disk
-- [ ] Implement `getActiveTeam(leadSessionId): TeamConfig | null` — find active team for a session
-- [ ] Implement guard: `assertNoActiveTeam(leadSessionId)` — error if team already exists (TL-9)
-- [ ] Implement guard: `assertIsLead(sessionId, teamConfig)` — error if not the lead (TL-10)
-- [ ] Implement guard: `assertNotTeammate(sessionId)` — error if a teammate tries to create a team (TL-11)
-- [ ] Support natural-language–driven creation: expose a function the lead can call after parsing user intent (TL-1)
-- [ ] Support lead-proposed creation with user confirmation gate (TL-2)
-- [ ] Write unit tests:
-  - [ ] `createTeam` generates unique name and persists valid config
-  - [ ] `createTeam` fails if an active team already exists for the session
-  - [ ] `loadTeam` correctly reads persisted config
-  - [ ] Teammate session cannot create a team
-  - [ ] Team config has correct `members` array structure
+- [x] Implement `loadTeam(teamName): TeamConfig` — read and parse config from disk
+- [x] Implement `getActiveTeam(leadSessionId): TeamConfig | null` — find active team for a session
+- [x] Implement guard: `assertNoActiveTeam(leadSessionId)` — error if team already exists (TL-9)
+- [x] Implement guard: `assertIsLead(sessionId, teamConfig)` — error if not the lead (TL-10)
+- [x] Implement guard: `assertNotTeammate(sessionId)` — error if a teammate tries to create a team (TL-11)
+- [x] Support natural-language–driven creation: expose a function the lead can call after parsing user intent (TL-1)
+- [x] Support lead-proposed creation with user confirmation gate (TL-2)
+- [x] Write unit tests:
+  - [x] `createTeam` generates unique name and persists valid config
+  - [x] `createTeam` fails if an active team already exists for the session
+  - [x] `loadTeam` correctly reads persisted config
+  - [x] Teammate session cannot create a team
+  - [x] Team config has correct `members` array structure
 
 ---
 
@@ -143,18 +143,18 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 **Requirement IDs:** TL-6, TL-7, TL-8
 
-- [ ] Implement `cleanupTeam(teamName, leadSessionId)`:
+- [x] Implement `cleanupTeam(teamName, leadSessionId)`:
   - Load team config
   - Assert caller is the lead
   - Check all teammates are stopped (TL-7); error with list of still-running teammates if not
   - Remove team directory (`~/.copilot/teams/{team-name}/`) including config, task list, messages, sprint state, file claims, and permission audit log
   - Return success/failure result
-- [ ] Implement `areAllTeammatesStopped(teamConfig): boolean` — check process status of each teammate
-- [ ] Write unit tests:
-  - [ ] Cleanup succeeds when all teammates are stopped
-  - [ ] Cleanup fails with clear error listing running teammates
-  - [ ] Cleanup removes entire team directory (config, backlog, messages, sprint, files, audit log)
-  - [ ] Non-lead cannot clean up team
+- [x] Implement `areAllTeammatesStopped(teamConfig): boolean` — check process status of each teammate
+- [x] Write unit tests:
+  - [x] Cleanup succeeds when all teammates are stopped
+  - [x] Cleanup fails with clear error listing running teammates
+  - [x] Cleanup removes entire team directory (config, backlog, messages, sprint, files, audit log)
+  - [x] Non-lead cannot clean up team
 
 ---
 
