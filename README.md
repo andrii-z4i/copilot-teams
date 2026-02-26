@@ -47,7 +47,8 @@ Add the MCP server to your Copilot CLI config:
   "mcpServers": {
     "copilot-teams": {
       "type": "stdio",
-      "command": "copilot-teams-mcp"
+      "command": "copilot-teams-mcp",
+      "args": []
     }
   }
 }
@@ -60,7 +61,8 @@ Add the MCP server to your Copilot CLI config:
   "mcpServers": {
     "copilot-teams": {
       "type": "stdio",
-      "command": "copilot-teams-mcp"
+      "command": "copilot-teams-mcp",
+      "args": []
     }
   }
 }
