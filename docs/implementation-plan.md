@@ -660,17 +660,17 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 **Requirement IDs:** CM-8, CM-9, CM-10
 
-- [ ] Implement read-only teammate output viewing:
+- [x] Implement read-only teammate output viewing:
   - In-process mode: user cycles through teammates using `Shift+Down` to view their output (CM-9)
   - Split-pane mode: user clicks into a teammate's pane to view their output (CM-10)
   - Viewing is **read-only** — user cannot type input directly to teammates
-- [ ] All control and instructions to teammates MUST go through the Team Lead (§3.4):
+- [x] All control and instructions to teammates MUST go through the Team Lead (§3.4):
   - User communicates with the Lead
   - The Lead relays instructions to teammates via the messaging system
-- [ ] Write unit tests:
-  - [ ] In-process mode cycling allows viewing teammate output
-  - [ ] User cannot send direct input to a teammate
-  - [ ] All instructions to teammates are routed through the Lead
+- [x] Write unit tests:
+  - [x] In-process mode cycling allows viewing teammate output
+  - [x] User cannot send direct input to a teammate
+  - [x] All instructions to teammates are routed through the Lead
 
 ---
 
