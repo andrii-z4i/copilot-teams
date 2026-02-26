@@ -78,23 +78,32 @@ The system targets the terminal-based Copilot CLI exclusively.
 | TM-5 | Each teammate MUST receive a spawn prompt from the lead that includes task-specific context. The lead's full conversation history MUST NOT carry over. |
 | TM-6 | The lead's terminal MUST list all active teammates and their current status/task. |
 
-#### 3.2.2 Permissions
+#### 3.2.2 Permissions & Approval Flow
+
+Teammates operate under a **least-privilege model**. They start with minimum permissions and must request approval from the Team Lead for every privileged operation. The lead acts as a gatekeeper, reviewing each request individually.
 
 | ID | Requirement |
 |----|-------------|
-| TM-7 | Teammates MUST inherit the lead's permission settings at spawn time. |
-| TM-8 | If the lead runs with elevated permissions (e.g., `--dangerously-skip-permissions`), all teammates MUST inherit those permissions. |
-| TM-9 | After spawning, individual teammate permission modes MAY be changed independently. |
-| TM-10 | Per-teammate permission modes MUST NOT be settable at spawn time (only after). |
+| TM-7 | Teammates MUST start with **minimum permissions** at spawn time — no inherited elevated permissions from the lead. |
+| TM-8 | The Team Lead MUST NOT approve permissions higher than those the lead itself possesses. |
+| TM-9 | When a teammate needs to perform a privileged operation (e.g., file write, shell command, external API call), it MUST send a **permission request** to the Team Lead before executing. |
+| TM-10 | The Team Lead MUST review each permission request and make a deliberate decision to **allow** or **disallow** the operation. |
+| TM-11 | Permission grants MUST be **single-use**. A grant authorizes exactly one execution of the requested operation. The teammate MUST request approval again for every subsequent execution of the same operation, even if identical. |
+| TM-12 | The Team Lead MUST NOT grant blanket or standing permissions to a teammate. Every execution requires a fresh approval. |
+| TM-13 | The Team Lead MUST log every permission request and its outcome (approved/denied) to a **permission audit log** file stored at `~/.copilot/teams/{team-name}/permission-audit.log`. |
+| TM-14 | Each audit log entry MUST include: timestamp, teammate name/ID, requested operation description, target resource (file path, command, etc.), and the lead's decision (approved/denied) with optional rationale. |
+| TM-15 | The permission audit log MUST be append-only and MUST NOT be modified or truncated by teammates. Only the lead (and the user) may read it. |
+| TM-16 | If the Team Lead is unavailable or unresponsive, the teammate MUST wait (block) until the lead responds. Teammates MUST NOT bypass the approval flow. |
+| TM-17 | The user MUST be able to review the permission audit log at any time to inspect the history of approved and denied operations. |
 
 #### 3.2.3 Shutdown
 
 | ID | Requirement |
 |----|-------------|
-| TM-11 | The user MUST be able to instruct the lead to shut down a specific teammate. |
-| TM-12 | The lead MUST send a shutdown request to the target teammate. |
-| TM-13 | The teammate MUST be able to approve (graceful exit) or reject (with explanation) the shutdown request. |
-| TM-14 | Teammates MUST finish their current in-progress operation before shutting down. |
+| TM-18 | The user MUST be able to instruct the lead to shut down a specific teammate. |
+| TM-19 | The lead MUST send a shutdown request to the target teammate. |
+| TM-20 | The teammate MUST be able to approve (graceful exit) or reject (with explanation) the shutdown request. |
+| TM-21 | Teammates MUST finish their current in-progress operation before shutting down. |
 
 ---
 
@@ -105,9 +114,9 @@ The system targets the terminal-based Copilot CLI exclusively.
 | ID | Requirement |
 |----|-------------|
 | TS-1 | The system MUST maintain a shared, persistent task list per team. |
-| TS-2 | Task list MUST be stored at `~/.copilot/tasks/{team-name}/`. |
+| TS-2 | Task list MUST be stored at `~/.copilot/tasks/{team-name}/backlog.md`. |
 | TS-3 | All team members (lead and teammates) MUST be able to read the task list. |
-| TS-4 | The lead MUST be able to create, update, and delete tasks. |
+| TS-4 | Only the lead MUST be able to create, update, and delete tasks. Task management is done via communication from teammates to the Team Lead. |
 
 #### 3.3.2 Task States
 
@@ -123,9 +132,9 @@ The system targets the terminal-based Copilot CLI exclusively.
 | ID | Requirement |
 |----|-------------|
 | TS-9 | The lead MUST be able to explicitly assign a task to a specific teammate. |
-| TS-10 | Teammates MUST be able to self-claim the next unassigned, unblocked `pending` task. |
+| TS-10 | Teammates MUST be able to self-claim the next unassigned, unblocked `pending` task by telling the Lead about it. |
 | TS-11 | After finishing a task, a teammate SHOULD automatically pick up the next available task. |
-| TS-12 | Task claiming MUST use file locking (or equivalent mechanism) to prevent race conditions when multiple teammates attempt to claim the same task simultaneously. |
+| TS-12 | Task claiming MUST use the Lead coordination (or equivalent mechanism) to prevent race conditions when multiple teammates attempt to claim the same task simultaneously. |
 
 #### 3.3.4 Task Sizing Guidance
 
@@ -278,7 +287,7 @@ These are accepted limitations for the initial release, consistent with the refe
 | LM-4 | **One team per session.** Clean up the current team before starting a new one. |
 | LM-5 | **No nested teams.** Teammates cannot spawn their own teams. |
 | LM-6 | **Lead is fixed.** Leadership cannot be transferred or promoted. |
-| LM-7 | **Permissions set at spawn.** All teammates start with the lead's permission settings. Per-teammate modes only changeable after spawn. |
+| LM-7 | **Permissions are single-use only.** Every privileged operation requires a fresh approval from the lead, which may slow down teammates on repetitive tasks. This is by design for safety and auditability. |
 
 ---
 
