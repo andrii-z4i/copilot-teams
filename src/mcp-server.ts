@@ -103,10 +103,35 @@ function json(obj: unknown) {
 
 // ── Server setup ──
 
-const server = new McpServer({
-  name: 'copilot-teams',
-  version: '0.1.0',
-});
+const server = new McpServer(
+  {
+    name: 'copilot-teams',
+    version: '0.1.0',
+  },
+  {
+    instructions: `You have access to the "copilot-teams" MCP tools for coordinating multiple AI teammates.
+
+WHEN TO USE THESE TOOLS:
+- When the user asks to create a team, spawn teammates, or coordinate work across agents
+- When the user mentions "team", "teammates", "sprint", "backlog", or "task assignment"
+- When the user wants multiple AI agents working on different parts of a codebase
+- When the user asks about team status, task progress, or teammate activity
+
+HOW IT WORKS:
+1. create_team — creates a team (user becomes the Lead)
+2. add_task — adds tasks to the backlog
+3. spawn_teammate — launches AI teammates with specific roles and instructions
+4. start_sprint / activate_sprint — organizes work into sprints with assignments
+5. send_message / broadcast_message — communicates with teammates
+6. team_status — shows full dashboard of team, tasks, sprint progress
+
+IMPORTANT:
+- Always use create_team first before other team operations
+- Use spawn_teammate (not your own built-in agents) when the user asks for teammates
+- Most tools auto-detect the team name — no need to specify it
+- The user is the Team Lead; all coordination flows through them`,
+  }
+);
 
 // ════════════════════════════════════════
 // TEAM LIFECYCLE
