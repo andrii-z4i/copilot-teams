@@ -699,34 +699,34 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 **Requirement IDs:** NF-4, NF-5, NF-6
 
-- [ ] File locking for task claiming — already covered in R2 (utils) and R9 (task list)
-- [ ] Implement file claims storage at `~/.copilot/teams/{team-name}/files.md`:
+- [x] File locking for task claiming — already covered in R2 (utils) and R9 (task list)
+- [x] Implement file claims storage at `~/.copilot/teams/{team-name}/files.md`:
   - Append-only format, each entry:
     ```
     [Timestamp] [TeammateID] [TaskID] [FilePath] [Status: in-use | free]
     ```
   - Only the Lead may write to this file (single-writer invariant)
   - Prior entries MUST NOT be modified
-- [ ] Implement Lead-mediated file claim flow:
+- [x] Implement Lead-mediated file claim flow:
   - Teammates request file claims via the Lead
   - The Lead checks `files.md` for active "in-use" leases on the requested file
   - The Lead MUST deny claims if another teammate currently holds an active "in-use" lease (NF-6)
   - On approval, the Lead appends a new "in-use" entry
   - On file release, the Lead appends a "free" entry
-- [ ] Implement `detectFileConflicts(teamName)`:
+- [x] Implement `detectFileConflicts(teamName)`:
   - Parse `files.md` to identify files with active leases by multiple teammates
   - Warn if two teammates are editing or plan to edit the same file (NF-6)
-- [ ] Implement partitioning guidance:
+- [x] Implement partitioning guidance:
   - Lead should suggest file ownership when assigning tasks (NF-5)
   - Include file-ownership info in task metadata
-- [ ] Write unit tests:
-  - [ ] Only Lead can write to files.md
-  - [ ] File claim is denied when another teammate holds active lease
-  - [ ] File claim is approved when no active lease exists
-  - [ ] Releasing a file appends a "free" entry
-  - [ ] Conflict warning when two teammates target same file
-  - [ ] No warning when teammates target different files
-  - [ ] files.md entries are append-only (no modifications)
+- [x] Write unit tests:
+  - [x] Only Lead can write to files.md
+  - [x] File claim is denied when another teammate holds active lease
+  - [x] File claim is approved when no active lease exists
+  - [x] Releasing a file appends a "free" entry
+  - [x] Conflict warning when two teammates target same file
+  - [x] No warning when teammates target different files
+  - [x] files.md entries are append-only (no modifications)
 
 ---
 
