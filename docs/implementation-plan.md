@@ -254,7 +254,7 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 **Requirement IDs:** TM-7, TM-8, TM-9, TM-10, TM-11, TM-12, TM-13, TM-14, TM-15, TM-16, TM-17
 
-- [ ] Define `PermissionRequest` interface:
+- [x] Define `PermissionRequest` interface:
   ```ts
   {
     id: string;
@@ -265,7 +265,7 @@ Before any feature work, establish the project structure, tooling, and shared in
     timestamp: string;
   }
   ```
-- [ ] Define `PermissionResponse` interface:
+- [x] Define `PermissionResponse` interface:
   ```ts
   {
     requestId: string;
@@ -273,36 +273,36 @@ Before any feature work, establish the project structure, tooling, and shared in
     rationale?: string;
   }
   ```
-- [ ] Implement `requestPermission(teamName, request)`:
+- [x] Implement `requestPermission(teamName, request)`:
   - Teammate requests the Lead to record the permission request (TM-9)
   - The Lead writes the request to the messaging system on the teammate's behalf
   - Teammate blocks until the Lead responds (TM-16)
   - Return approval/denial result
-- [ ] Implement `reviewPermission(teamName, requestId, decision, rationale?)`:
+- [x] Implement `reviewPermission(teamName, requestId, decision, rationale?)`:
   - Validate lead has sufficient permissions (TM-8)
   - Lead records response via messaging system (TM-10)
   - Log to permission audit log (TM-13)
-- [ ] Implement permission enforcement at teammate level:
+- [x] Implement permission enforcement at teammate level:
   - Intercept privileged operations (file write, shell exec, API calls)
   - Auto-trigger `requestPermission` before execution
   - Ensure grants are single-use — no caching or reuse (TM-11, TM-12)
   - Default to minimum permissions at spawn (TM-7)
-- [ ] Implement permission audit log:
+- [x] Implement permission audit log:
   - File: `~/.copilot/teams/{team-name}/permission-audit.log`
   - Format: one JSON line per entry with timestamp, teammate, operation, target, decision, rationale (TM-14)
   - Append-only; teammates cannot modify or truncate (TM-15)
   - Only the Lead and the user may read the audit log; teammates MUST NOT read it (TM-15)
   - Expose `readAuditLog(teamName)` for user review (TM-17)
-- [ ] Write unit tests:
-  - [ ] Teammate starts with minimum permissions (no inherited elevation)
-  - [ ] Permission request blocks until lead responds
-  - [ ] Approved request allows one execution only
-  - [ ] Second identical request requires fresh approval
-  - [ ] Denied request blocks the operation
-  - [ ] Lead cannot grant permissions beyond its own level
-  - [ ] Audit log entry contains all required fields
-  - [ ] Audit log is append-only (write to existing, never overwrite)
-  - [ ] User can read full audit log
+- [x] Write unit tests:
+  - [x] Teammate starts with minimum permissions (no inherited elevation)
+  - [x] Permission request blocks until lead responds
+  - [x] Approved request allows one execution only
+  - [x] Second identical request requires fresh approval
+  - [x] Denied request blocks the operation
+  - [x] Lead cannot grant permissions beyond its own level
+  - [x] Audit log entry contains all required fields
+  - [x] Audit log is append-only (write to existing, never overwrite)
+  - [x] User can read full audit log
 
 ---
 
