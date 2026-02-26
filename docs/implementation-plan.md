@@ -736,22 +736,22 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 **Requirement IDs:** NF-7, NF-8, NF-9
 
-- [ ] Implement crash detection:
+- [x] Implement crash detection:
   - Monitor teammate process exit codes
   - On unexpected exit, notify lead immediately (NF-7)
   - Include error info (exit code, last stderr) in notification
-- [ ] Implement recovery options (NF-8):
+- [x] Implement recovery options (NF-8):
   - User can give stopped teammate additional instructions (if process can be restarted)
   - User can spawn a replacement teammate with the same task context
-- [ ] Implement orphan cleanup (NF-9):
+- [x] Implement orphan cleanup (NF-9):
   - On team startup, check for stale processes from previous sessions
   - On unclean shutdown, detect and kill orphaned tmux panes
   - Clean up stale lockfiles
-- [ ] Write unit tests:
-  - [ ] Lead is notified on teammate crash
-  - [ ] Replacement teammate can be spawned with same context
-  - [ ] Stale lockfiles are detected and cleaned
-  - [ ] Orphaned tmux panes are detected
+- [x] Write unit tests:
+  - [x] Lead is notified on teammate crash
+  - [x] Replacement teammate can be spawned with same context
+  - [x] Stale lockfiles are detected and cleaned
+  - [x] Orphaned tmux panes are detected
 
 ---
 
