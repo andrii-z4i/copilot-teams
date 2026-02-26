@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { resolveTeamFile, withLock, ensureDir, atomicWriteFile, appendFile } from '../utils/index.js';
 import { readTaskList, updateTask } from '../tasks/index.js';
+import { COMPLEXITY_WEIGHTS, CAPACITY_PER_ITERATION } from '../constants.js';
 import type { Sprint, SprintStatus, SprintAssignment, ComplexitySize } from '../types.js';
 
 // ── Serialization ──
@@ -173,6 +174,22 @@ export async function activateSprint(
       throw new Error(
         `Sprint #${sprintNumber} is "${sprint.status}", not "planning". Cannot activate.`,
       );
+    }
+
+    // Validate capacity limits (TS-16)
+    const loadByTeammate = new Map<string, number>();
+    for (const assignment of assignments) {
+      const current = loadByTeammate.get(assignment.teammate) ?? 0;
+      const weight = COMPLEXITY_WEIGHTS[assignment.estimate] ?? 0;
+      const newLoad = current + weight;
+      if (newLoad > CAPACITY_PER_ITERATION) {
+        throw new Error(
+          `Teammate "${assignment.teammate}" would exceed capacity limit ` +
+          `(${newLoad} > ${CAPACITY_PER_ITERATION} weight points). ` +
+          `Reduce their assignments or decompose tasks.`
+        );
+      }
+      loadByTeammate.set(assignment.teammate, newLoad);
     }
 
     // Update the sprint in-place

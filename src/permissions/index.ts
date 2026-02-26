@@ -9,8 +9,23 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import lockfile from 'proper-lockfile';
 import { resolveTeamFile, appendFile, withLock, ensureDir } from '../utils/index.js';
 import type { PermissionRequest, PermissionResponse, PermissionAuditEntry } from '../types.js';
+
+// Synchronous lock helper for use in synchronous contexts (e.g., Promise constructors)
+function withLockSync<T>(filePath: string, fn: () => T): T {
+  ensureDir(path.dirname(filePath));
+  if (!fs.existsSync(filePath)) {
+    fs.writeFileSync(filePath, '', 'utf-8');
+  }
+  lockfile.lockSync(filePath);
+  try {
+    return fn();
+  } finally {
+    lockfile.unlockSync(filePath);
+  }
+}
 
 // ── Pending Requests ──
 
@@ -67,10 +82,12 @@ export function requestPermission(
     );
     ensureDir(path.dirname(pendingRequestsPath));
 
-    // Append to pending permissions file
-    const existing = loadPendingRequests(teamName);
-    existing.push(request);
-    fs.writeFileSync(pendingRequestsPath, JSON.stringify(existing, null, 2), 'utf-8');
+    // Append to pending permissions file (with lock)
+    withLockSync(pendingRequestsPath, () => {
+      const existing = loadPendingRequests(teamName);
+      existing.push(request);
+      fs.writeFileSync(pendingRequestsPath, JSON.stringify(existing, null, 2), 'utf-8');
+    });
   });
 }
 
@@ -93,14 +110,16 @@ export function loadPendingRequests(teamName: string): PermissionRequest[] {
 /**
  * Remove a request from the pending list.
  */
-function removePendingRequest(teamName: string, requestId: string): void {
+async function removePendingRequest(teamName: string, requestId: string): Promise<void> {
   const pendingPath = path.join(
     path.dirname(resolveTeamFile(teamName, 'config')),
     'pending-permissions.json',
   );
-  const existing = loadPendingRequests(teamName);
-  const filtered = existing.filter((r) => r.id !== requestId);
-  fs.writeFileSync(pendingPath, JSON.stringify(filtered, null, 2), 'utf-8');
+  await withLock(pendingPath, () => {
+    const existing = loadPendingRequests(teamName);
+    const filtered = existing.filter((r) => r.id !== requestId);
+    fs.writeFileSync(pendingPath, JSON.stringify(filtered, null, 2), 'utf-8');
+  });
 }
 
 // ── Lead Review ──
@@ -144,7 +163,7 @@ export async function reviewPermission(
   });
 
   // Remove from pending
-  removePendingRequest(teamName, requestId);
+  await removePendingRequest(teamName, requestId);
 
   // Resolve the teammate's blocking promise (TM-16)
   const resolver = pendingRequests.get(requestId);
@@ -235,15 +254,17 @@ export async function checkPermission(
     return { approved: decision === 'approved', response };
   }
 
-  // Store pending request for manual review
+  // Store pending request for manual review (with lock)
   const pendingPath = path.join(
     path.dirname(resolveTeamFile(teamName, 'config')),
     'pending-permissions.json',
   );
   ensureDir(path.dirname(pendingPath));
-  const existing = loadPendingRequests(teamName);
-  existing.push(request);
-  fs.writeFileSync(pendingPath, JSON.stringify(existing, null, 2), 'utf-8');
+  await withLock(pendingPath, () => {
+    const existing = loadPendingRequests(teamName);
+    existing.push(request);
+    fs.writeFileSync(pendingPath, JSON.stringify(existing, null, 2), 'utf-8');
+  });
 
   // Block until reviewed
   return new Promise<{ approved: boolean; response: PermissionResponse }>((resolve) => {

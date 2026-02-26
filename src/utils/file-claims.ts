@@ -166,14 +166,17 @@ export async function detectFileConflicts(
   // Process in order; track latest status per (file, teammate)
   const latestStatus = new Map<string, FileClaimStatus>();
 
+  const SEP = '\0';
   for (const claim of claims) {
-    const key = `${claim.filePath}::${claim.teammateId}`;
+    const key = `${claim.filePath}${SEP}${claim.teammateId}`;
     latestStatus.set(key, claim.status);
   }
 
   for (const [key, status] of latestStatus) {
     if (status !== 'in-use') continue;
-    const [filePath, teammateId] = key.split('::');
+    const sepIdx = key.indexOf(SEP);
+    const filePath = key.substring(0, sepIdx);
+    const teammateId = key.substring(sepIdx + 1);
     if (!byFile.has(filePath)) {
       byFile.set(filePath, new Set());
     }
@@ -188,6 +191,39 @@ export async function detectFileConflicts(
   }
 
   return conflicts;
+}
+
+/**
+ * Release all file claims held by a specific teammate.
+ * Called when a teammate crashes to free their claimed files.
+ */
+export async function releaseAllTeammateClaims(
+  teamName: string,
+  teammateId: string
+): Promise<FileClaim[]> {
+  const lockPath = resolvePath(teamName, FILES_FILE);
+  return withLock(lockPath, async () => {
+    const claims = await readClaims(teamName);
+    const active = getActiveLeases(claims);
+    const released: FileClaim[] = [];
+
+    for (const [fp, claim] of active) {
+      if (claim.teammateId === teammateId) {
+        const freeClaim: FileClaim = {
+          timestamp: new Date().toISOString(),
+          teammateId,
+          taskId: claim.taskId,
+          filePath: fp,
+          status: 'free',
+        };
+        const filePath = resolvePath(teamName, FILES_FILE);
+        await ensureDir(path.dirname(filePath));
+        await appendFile(filePath, serializeClaim(freeClaim) + '\n');
+        released.push(freeClaim);
+      }
+    }
+    return released;
+  });
 }
 
 /**

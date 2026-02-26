@@ -56,11 +56,15 @@ export function resolveAllTeamFiles(teamName: string): Record<KnownFile, string>
 
 // ── Directory Management ──
 
+const ensuredDirs = new Set<string>();
+
 /**
- * Create directory tree if it does not exist.
+ * Create directory tree if it does not exist (cached to avoid redundant syscalls).
  */
 export function ensureDir(dirPath: string): void {
+  if (ensuredDirs.has(dirPath)) return;
   fs.mkdirSync(dirPath, { recursive: true });
+  ensuredDirs.add(dirPath);
 }
 
 /**

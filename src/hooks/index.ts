@@ -63,6 +63,7 @@ function runCommand(
   const result: SpawnSyncReturns<string> = spawnSync(command, {
     shell: true,
     encoding: 'utf-8',
+    timeout: 30_000,
     env: { ...process.env, ...env },
     cwd,
   });

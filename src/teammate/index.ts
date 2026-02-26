@@ -222,7 +222,7 @@ export async function spawnTeammate(
     detached: false,
   });
 
-  // Handle spawn errors (e.g., command not found) gracefully
+  // Register error handler FIRST, before accessing child.pid
   child.on('error', async (err) => {
     unregisterProcess(teamName, options.name);
     try {
@@ -232,7 +232,13 @@ export async function spawnTeammate(
     }
   });
 
-  const pid = child.pid!;
+  const pid = child.pid;
+  if (pid === undefined) {
+    try {
+      await updateMemberStatus(teamName, leadSessionId, options.name, 'crashed');
+    } catch { /* Team may have been cleaned up */ }
+    throw new Error(`Failed to spawn teammate "${options.name}": process PID is undefined.`);
+  }
 
   const teammateProc: TeammateProcess = {
     name: options.name,
@@ -246,6 +252,18 @@ export async function spawnTeammate(
   // Update status to active with PID
   await updateMemberStatus(teamName, leadSessionId, options.name, 'active', pid);
 
+  // Buffer stderr for crash diagnostics
+  let stderrBuffer = '';
+  if (child.stderr) {
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderrBuffer += chunk.toString();
+      // Keep only last 4KB
+      if (stderrBuffer.length > 4096) {
+        stderrBuffer = stderrBuffer.slice(-4096);
+      }
+    });
+  }
+
   // Monitor process exit for crash detection
   child.on('exit', async (code, signal) => {
     // If process was already unregistered (e.g., by forceShutdown), skip
@@ -254,6 +272,19 @@ export async function spawnTeammate(
     const newStatus: MemberStatus = code === 0 || signal === 'SIGTERM' ? 'stopped' : 'crashed';
     try {
       await updateMemberStatus(teamName, leadSessionId, options.name, newStatus);
+      // Notify lead of crash (NF-7)
+      if (newStatus === 'crashed') {
+        try {
+          const { notifyCrash } = await import('../utils/resilience.js');
+          await notifyCrash(teamName, {
+            teammateName: options.name,
+            exitCode: code,
+            signal: signal,
+            lastStderr: stderrBuffer.slice(-200),
+            timestamp: new Date().toISOString(),
+          });
+        } catch { /* Best effort notification */ }
+      }
     } catch {
       // Team may have been cleaned up
     }
@@ -270,10 +301,23 @@ export async function spawnMultipleTeammates(
   leadSessionId: string,
   specs: SpawnOptions[],
 ): Promise<TeammateProcess[]> {
-  const results = await Promise.all(
+  const results = await Promise.allSettled(
     specs.map((spec) => spawnTeammate(teamName, leadSessionId, spec)),
   );
-  return results;
+  const succeeded: TeammateProcess[] = [];
+  const failed: string[] = [];
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i];
+    if (result.status === 'fulfilled') {
+      succeeded.push(result.value);
+    } else {
+      failed.push(`${specs[i].name}: ${result.reason}`);
+    }
+  }
+  if (failed.length > 0 && succeeded.length === 0) {
+    throw new Error(`All teammate spawns failed: ${failed.join('; ')}`);
+  }
+  return succeeded;
 }
 
 // ── Status Queries ──

@@ -55,3 +55,20 @@ export const TEAMMATE_MODES = ['auto', 'in-process', 'tmux'] as const;
 // ── Environment variables ──
 
 export const ENV_TEAMS_ENABLED = 'COPILOT_TEAMS_ENABLED';
+
+// ── Input Validation ──
+
+const SAFE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]*$/i;
+const SAFE_TEAM_NAME_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
+
+export function validateIdentifier(id: string, label: string = 'Identifier'): void {
+  if (!id || id.length === 0) throw new Error(`${label} must not be empty.`);
+  if (id.length > 64) throw new Error(`${label} must be at most 64 characters.`);
+  if (!SAFE_ID_PATTERN.test(id)) throw new Error(`${label} contains invalid characters. Must match ${SAFE_ID_PATTERN}.`);
+}
+
+export function validateTeamName(name: string): void {
+  if (!name || name.length === 0) throw new Error('Team name must not be empty.');
+  if (name.length > 50) throw new Error('Team name must be at most 50 characters.');
+  if (!SAFE_TEAM_NAME_PATTERN.test(name)) throw new Error(`Team name contains invalid characters. Must match ${SAFE_TEAM_NAME_PATTERN}.`);
+}

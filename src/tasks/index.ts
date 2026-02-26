@@ -120,6 +120,39 @@ function writeTaskList(teamName: string, tasks: Task[]): void {
 }
 
 /**
+ * Detect if adding a dependency would create a cycle.
+ * Uses depth-first search on the dependency graph.
+ */
+function hasDependencyCycle(tasks: Task[], newTaskId: string, dependencies: string[]): boolean {
+  // Build adjacency list from existing tasks
+  const graph = new Map<string, string[]>();
+  for (const task of tasks) {
+    graph.set(task.id, [...task.dependencies]);
+  }
+  // Add the new task's edges
+  graph.set(newTaskId, dependencies);
+
+  // DFS cycle detection
+  const visited = new Set<string>();
+  const inStack = new Set<string>();
+
+  function dfs(nodeId: string): boolean {
+    if (inStack.has(nodeId)) return true; // cycle found
+    if (visited.has(nodeId)) return false;
+    visited.add(nodeId);
+    inStack.add(nodeId);
+    const deps = graph.get(nodeId) ?? [];
+    for (const dep of deps) {
+      if (dfs(dep)) return true;
+    }
+    inStack.delete(nodeId);
+    return false;
+  }
+
+  return dfs(newTaskId);
+}
+
+/**
  * Create a new task (TS-4). Lead-only.
  */
 export async function createTask(
@@ -134,6 +167,20 @@ export async function createTask(
     // Check for duplicate ID
     if (tasks.some((t) => t.id === task.id)) {
       throw new Error(`Task "${task.id}" already exists.`);
+    }
+
+    // Validate dependency IDs exist
+    for (const depId of task.dependencies) {
+      if (!tasks.some((t) => t.id === depId)) {
+        throw new Error(`Dependency "${depId}" not found in backlog.`);
+      }
+    }
+
+    // Detect dependency cycles
+    if (hasDependencyCycle(tasks, task.id, task.dependencies)) {
+      throw new Error(
+        `Adding task "${task.id}" with dependencies [${task.dependencies.join(', ')}] would create a dependency cycle.`
+      );
     }
 
     const now = new Date().toISOString();
@@ -168,6 +215,20 @@ export async function createTasksBatch(
     for (const input of taskInputs) {
       if (tasks.some((t) => t.id === input.id)) {
         continue; // Skip duplicates silently in batch mode
+      }
+
+      // Validate dependency IDs (must be in existing tasks or earlier in this batch)
+      for (const depId of input.dependencies) {
+        if (!tasks.some((t) => t.id === depId)) {
+          throw new Error(`Dependency "${depId}" not found in backlog.`);
+        }
+      }
+
+      // Detect dependency cycles
+      if (hasDependencyCycle(tasks, input.id, input.dependencies)) {
+        throw new Error(
+          `Adding task "${input.id}" with dependencies [${input.dependencies.join(', ')}] would create a dependency cycle.`
+        );
       }
 
       const newTask: Task = {
@@ -207,6 +268,21 @@ export function updateTaskInternal(
       throw new Error(
         `Invalid state transition: ${current.status} → ${updates.status}. ` +
           `Allowed transitions from "${current.status}": ${VALID_TRANSITIONS[current.status].join(', ') || 'none'}.`,
+      );
+    }
+  }
+
+  if (updates.dependencies) {
+    // Validate dependency IDs exist
+    for (const depId of updates.dependencies) {
+      if (!tasks.some((t) => t.id === depId)) {
+        throw new Error(`Dependency "${depId}" not found in backlog.`);
+      }
+    }
+    // Detect cycles
+    if (hasDependencyCycle(tasks, taskId, updates.dependencies)) {
+      throw new Error(
+        `Updating task "${taskId}" dependencies to [${updates.dependencies.join(', ')}] would create a dependency cycle.`
       );
     }
   }

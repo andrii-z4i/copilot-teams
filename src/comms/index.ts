@@ -86,11 +86,14 @@ export async function appendMessage(
 
   const messagesPath = resolveTeamFile(teamName, 'messages');
 
+  // Sanitize body: replace newlines with spaces to prevent message injection
+  const sanitizedBody = body.replace(/[\r\n]+/g, ' ');
+
   return withLock(messagesPath, () => {
     const id = getNextMessageId(teamName);
     const timestamp = new Date().toISOString();
 
-    const message: Message = { id, timestamp, from, to, body };
+    const message: Message = { id, timestamp, from, to, body: sanitizedBody };
     const line = formatMessage(message) + '\n';
 
     ensureDir(path.dirname(messagesPath));
@@ -192,6 +195,7 @@ interface WatcherState {
   watcher: fs.FSWatcher;
   lastId: number;
   callbacks: Map<string, MessageCallback>;
+  debounceTimer: ReturnType<typeof setTimeout> | null;
 }
 
 const watchers = new Map<string, WatcherState>();
@@ -220,26 +224,31 @@ export function watchMessages(
     const lastId = existingMessages.reduce((max, m) => Math.max(max, m.id), 0);
 
     const watcher = fs.watch(messagesPath, () => {
-      const currentState = watchers.get(teamName);
-      if (!currentState) return;
+      const st = watchers.get(teamName);
+      if (st?.debounceTimer) clearTimeout(st.debounceTimer);
+      const timer = setTimeout(() => {
+        const currentState = watchers.get(teamName);
+        if (!currentState) return;
 
-      const newMessages = readAllMessages(teamName).filter(
-        (m) => m.id > currentState.lastId,
-      );
-      if (newMessages.length === 0) return;
-
-      currentState.lastId = Math.max(...newMessages.map((m) => m.id));
-
-      // Dispatch to each registered callback
-      for (const [rid, cb] of currentState.callbacks) {
-        const relevant = newMessages.filter(
-          (m) => m.to === rid || m.to === 'BROADCAST',
+        const newMessages = readAllMessages(teamName).filter(
+          (m) => m.id > currentState.lastId,
         );
-        if (relevant.length > 0) cb(relevant);
-      }
+        if (newMessages.length === 0) return;
+
+        currentState.lastId = Math.max(...newMessages.map((m) => m.id));
+
+        for (const [rid, cb] of currentState.callbacks) {
+          const relevant = newMessages.filter(
+            (m) => m.to === rid || m.to === 'BROADCAST',
+          );
+          if (relevant.length > 0) cb(relevant);
+        }
+      }, 50);
+      const st2 = watchers.get(teamName);
+      if (st2) st2.debounceTimer = timer;
     });
 
-    state = { watcher, lastId, callbacks: new Map() };
+    state = { watcher, lastId, callbacks: new Map(), debounceTimer: null };
     watchers.set(teamName, state);
   }
 
@@ -251,6 +260,7 @@ export function watchMessages(
     if (!s) return;
     s.callbacks.delete(recipientId);
     if (s.callbacks.size === 0) {
+      if (s.debounceTimer) clearTimeout(s.debounceTimer);
       s.watcher.close();
       watchers.delete(teamName);
     }
@@ -263,6 +273,7 @@ export function watchMessages(
 export function stopWatching(teamName: string): void {
   const state = watchers.get(teamName);
   if (state) {
+    if (state.debounceTimer) clearTimeout(state.debounceTimer);
     state.watcher.close();
     watchers.delete(teamName);
   }
