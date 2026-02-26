@@ -9,6 +9,8 @@
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import type { ServerNotification, ServerRequest } from '@modelcontextprotocol/sdk/types.js';
+import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
 import { z } from 'zod';
 
 // ── Library imports ──
@@ -948,12 +950,32 @@ async function monitorAndRespawn(
   teamName: string,
   pollIntervalMs: number = 15000,
   maxWaitMs: number = 600000,
+  extra?: RequestHandlerExtra<ServerRequest, ServerNotification>,
 ): Promise<{ completed: boolean; reason: string }> {
   const startTime = Date.now();
   const team = safeLoadTeam(teamName);
+  let pollCount = 0;
 
   while (Date.now() - startTime < maxWaitMs) {
     await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+    pollCount++;
+
+    // Send progress notification to prevent MCP client timeout
+    const progressToken = extra?._meta?.progressToken;
+    if (progressToken != null && extra?.sendNotification) {
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      try {
+        await extra.sendNotification({
+          method: 'notifications/progress',
+          params: {
+            progressToken,
+            progress: elapsed,
+            total: Math.round(maxWaitMs / 1000),
+            message: `Monitoring teammates (${elapsed}s elapsed)`,
+          },
+        } as ServerNotification);
+      } catch { /* progress notifications are best-effort */ }
+    }
 
     // Check task completion
     const tasks = readTaskList(teamName);
@@ -1019,7 +1041,7 @@ server.tool(
     // timeout_minutes is in minutes (default: 10)
     timeout_minutes: z.number().optional().describe('Max wait time in minutes (default: 10)'),
   },
-  async ({ tasks: taskInputs, teammates, team_name, session_id, timeout_minutes }) => {
+  async ({ tasks: taskInputs, teammates, team_name, session_id, timeout_minutes }, extra) => {
     const timeoutMs = (timeout_minutes ?? 10) * 60 * 1000;
     const results: string[] = [];
 
@@ -1075,7 +1097,7 @@ server.tool(
 
     // 6. Monitor progress with auto-respawn
     results.push(`⏳ Monitoring progress (timeout: ${timeout_minutes ?? 10}min)...`);
-    const monitor = await monitorAndRespawn(team.teamName, 15000, timeoutMs);
+    const monitor = await monitorAndRespawn(team.teamName, 15000, timeoutMs, extra);
     results.push(monitor.completed ? `✓ ${monitor.reason}` : `⚠ ${monitor.reason}`);
 
     // 7. Collect reports
