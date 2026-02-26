@@ -12,9 +12,9 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 **Goal:** Initialize the project with build tooling, directory structure, linting, and test infrastructure.
 
-- [ ] Choose runtime and language (TypeScript + Node.js recommended to align with Copilot CLI ecosystem)
-- [ ] Initialize package with `package.json`, `tsconfig.json`, ESLint, Prettier
-- [ ] Create source directory structure:
+- [x] Choose runtime and language (TypeScript + Node.js recommended to align with Copilot CLI ecosystem)
+- [x] Initialize package with `package.json`, `tsconfig.json`, ESLint, Prettier
+- [x] Create source directory structure:
   ```
   src/
     config/        # Configuration loading & feature flag
@@ -27,11 +27,11 @@ Before any feature work, establish the project structure, tooling, and shared in
     plan/          # Plan approval workflow
     utils/         # File locking, logging, path helpers
   ```
-- [ ] Create test directory mirroring `src/` structure
-- [ ] Add shared types/interfaces file (`src/types.ts`) for `TeamConfig`, `Task`, `Message`, `PermissionRequest`, etc.
-- [ ] Add shared constants file (`src/constants.ts`) for well-known paths (`~/.copilot/teams/`, `~/.copilot/tasks/`), states, sizes
-- [ ] Set up unit test runner (Vitest or Jest)
-- [ ] Set up integration test harness that can create/cleanup temp directories
+- [x] Create test directory mirroring `src/` structure
+- [x] Add shared types/interfaces file (`src/types.ts`) for `TeamConfig`, `Task`, `Message`, `PermissionRequest`, etc.
+- [x] Add shared constants file (`src/constants.ts`) for well-known paths (`~/.copilot/teams/`, `~/.copilot/tasks/`), states, sizes
+- [x] Set up unit test runner (Vitest or Jest)
+- [x] Set up integration test harness that can create/cleanup temp directories
 
 **Depends on:** Nothing  
 **Requirement IDs:** Foundation for all requirements
