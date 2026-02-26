@@ -109,7 +109,7 @@ function defaultSpawnCommandBuilder(
 
   // Spawn prompt is passed via stdin after launch
   return {
-    command: 'copilot-cli',
+    command: 'copilot',
     args,
     env: {
       COPILOT_TEAMS_TEAMMATE: '1',
@@ -193,6 +193,16 @@ export async function spawnTeammate(
     env: { ...process.env, ...extraEnv },
     stdio: ['pipe', 'pipe', 'pipe'],
     detached: false,
+  });
+
+  // Handle spawn errors (e.g., command not found) gracefully
+  child.on('error', async (err) => {
+    unregisterProcess(teamName, options.name);
+    try {
+      await updateMemberStatus(teamName, leadSessionId, options.name, 'crashed');
+    } catch {
+      // Team may have been cleaned up
+    }
   });
 
   const pid = child.pid!;
