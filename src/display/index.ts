@@ -8,6 +8,7 @@
 
 import { readTaskList } from '../tasks/index.js';
 import { spawnSync } from 'node:child_process';
+import type { TeammateMode, CopilotTeamsConfig } from '../types.js';
 
 // ── Types ──
 
@@ -397,5 +398,59 @@ export class TestKeyReader implements KeyReader {
     if (this.running && this.handler) {
       this.handler(key);
     }
+  }
+}
+
+// ── Display mode resolution (R15) ──
+
+export interface CliFlags {
+  teammateMode?: TeammateMode;
+}
+
+/**
+ * Resolve which display mode to use. Priority (DM-10, DM-11, DM-12):
+ * 1. CLI flag `--teammate-mode` (highest)
+ * 2. Settings file `teammateMode`
+ * 3. Auto: tmux if inside tmux, else in-process
+ */
+export function resolveDisplayMode(
+  config: CopilotTeamsConfig,
+  cliFlags: CliFlags = {}
+): DisplayMode {
+  // 1. CLI flag override (DM-12)
+  if (cliFlags.teammateMode && cliFlags.teammateMode !== 'auto') {
+    return cliFlags.teammateMode as DisplayMode;
+  }
+
+  // 2. Settings file override (DM-11)
+  if (
+    !cliFlags.teammateMode &&
+    config.teammateMode &&
+    config.teammateMode !== 'auto'
+  ) {
+    return config.teammateMode as DisplayMode;
+  }
+
+  // 3. Auto-detect (DM-10)
+  const terminal = detectTerminalEnvironment();
+  if (terminal === 'tmux') return 'tmux';
+  if (terminal === 'iterm2') return 'iterm2';
+  return 'in-process';
+}
+
+/**
+ * Instantiate the correct display class based on resolved mode.
+ */
+export function createDisplay(
+  mode: DisplayMode,
+  teamName: string
+): InProcessDisplay | TmuxDisplay | ITermDisplay {
+  switch (mode) {
+    case 'in-process':
+      return new InProcessDisplay(teamName);
+    case 'tmux':
+      return new TmuxDisplay(teamName);
+    case 'iterm2':
+      return new ITermDisplay();
   }
 }

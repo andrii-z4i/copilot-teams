@@ -559,18 +559,18 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 **Requirement IDs:** DM-10, DM-11, DM-12
 
-- [ ] Implement `resolveDisplayMode(config, cliFlags)`:
+- [x] Implement `resolveDisplayMode(config, cliFlags)`:
   - If CLI flag `--teammate-mode` is set → use it (DM-12)
   - Else if `teammateMode` in settings → use it (DM-11)
   - Else `"auto"`:
     - If inside tmux → split-pane (tmux) (DM-10)
     - Else → in-process (DM-10)
-- [ ] Instantiate correct display class based on resolved mode
-- [ ] Write unit tests:
-  - [ ] CLI flag overrides settings file
-  - [ ] Settings file overrides auto
-  - [ ] Auto mode picks split-pane inside tmux
-  - [ ] Auto mode picks in-process outside tmux
+- [x] Instantiate correct display class based on resolved mode
+- [x] Write unit tests:
+  - [x] CLI flag overrides settings file
+  - [x] Settings file overrides auto
+  - [x] Auto mode picks split-pane inside tmux
+  - [x] Auto mode picks in-process outside tmux
 
 ---
 
