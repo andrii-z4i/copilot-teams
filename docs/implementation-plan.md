@@ -312,22 +312,22 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 **Requirement IDs:** TM-18, TM-19, TM-20, TM-21
 
-- [ ] Implement `requestShutdown(teamName, teammateName)`:
+- [x] Implement `requestShutdown(teamName, teammateName)`:
   - Lead sends shutdown request to target teammate via messaging system (TM-19)
   - Wait for response (approve/reject)
-- [ ] Implement `handleShutdownRequest(teamName)` (teammate-side):
+- [x] Implement `handleShutdownRequest(teamName)` (teammate-side):
   - If no in-progress operation: approve and begin graceful exit (TM-20)
   - If in-progress operation: finish current operation, then exit (TM-21)
   - If rejecting: send rejection with explanation (TM-20)
-- [ ] Implement `forceShutdown(teamName, teammateName)` — kill process if teammate is unresponsive (fallback)
-- [ ] Update team config member status to `"stopped"` after shutdown
-- [ ] Remove teammate from active process tracking
-- [ ] Write unit tests:
-  - [ ] Shutdown request triggers graceful exit when idle
-  - [ ] Teammate finishes in-progress work before shutting down
-  - [ ] Teammate can reject shutdown with explanation
-  - [ ] Team config is updated after shutdown
-  - [ ] Force shutdown terminates unresponsive teammate
+- [x] Implement `forceShutdown(teamName, teammateName)` — kill process if teammate is unresponsive (fallback)
+- [x] Update team config member status to `"stopped"` after shutdown
+- [x] Remove teammate from active process tracking
+- [x] Write unit tests:
+  - [x] Shutdown request triggers graceful exit when idle
+  - [x] Teammate finishes in-progress work before shutting down
+  - [x] Teammate can reject shutdown with explanation
+  - [x] Team config is updated after shutdown
+  - [x] Force shutdown terminates unresponsive teammate
 
 ---
 

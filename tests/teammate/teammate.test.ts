@@ -12,6 +12,10 @@ import {
   clearProcesses,
   setSpawnCommandBuilder,
   resetSpawnCommandBuilder,
+  requestShutdown,
+  forceShutdown,
+  registerShutdownHandler,
+  unregisterShutdownHandler,
 } from '../../src/teammate/index.js';
 import { createTeam } from '../../src/team/index.js';
 import * as constants from '../../src/constants.js';
@@ -286,5 +290,161 @@ describe('process lifecycle', () => {
     const statuses = getTeammateStatuses('test-team');
     const crasher = statuses.find((s) => s.name === 'crasher');
     expect(crasher!.status).toBe('crashed');
+  });
+});
+
+// ── R8: Teammate Shutdown ──
+
+describe('requestShutdown', () => {
+  it('graceful shutdown when teammate is idle (TM-20)', async () => {
+    await createTeam({ leadSessionId: 'lead-1', teamName: 'test-team' });
+    const proc = await spawnTeammate('test-team', 'lead-1', {
+      name: 'idle-worker',
+      spawnPrompt: 'test',
+    });
+
+    // Register handler that approves
+    registerShutdownHandler('test-team', 'idle-worker', () => ({
+      decision: 'approve',
+    }));
+
+    const result = await requestShutdown('test-team', 'lead-1', 'idle-worker', 3000);
+
+    expect(result.success).toBe(true);
+    expect(result.method).toBe('graceful');
+    expect(result.teammateName).toBe('idle-worker');
+
+    // Verify config updated
+    const statuses = getTeammateStatuses('test-team');
+    const worker = statuses.find((s) => s.name === 'idle-worker');
+    expect(worker!.status).toBe('stopped');
+  });
+
+  it('teammate finishes in-progress work before shutting down (TM-21)', async () => {
+    // Spawn a process that takes a moment to exit
+    setSpawnCommandBuilder((_teamName, options) => ({
+      command: process.execPath,
+      args: [
+        '-e',
+        `
+        process.stdin.resume();
+        process.on('SIGTERM', () => {
+          // Simulate finishing work
+          setTimeout(() => process.exit(0), 100);
+        });
+        `,
+      ],
+      env: {
+        COPILOT_TEAMS_TEAMMATE: '1',
+        COPILOT_TEAMS_TEAM_NAME: _teamName,
+        COPILOT_TEAMS_TEAMMATE_NAME: options.name,
+      },
+    }));
+
+    await createTeam({ leadSessionId: 'lead-1', teamName: 'test-team' });
+    await spawnTeammate('test-team', 'lead-1', {
+      name: 'busy-worker',
+      spawnPrompt: 'test',
+    });
+
+    // Give process time to start
+    await new Promise((r) => setTimeout(r, 100));
+
+    registerShutdownHandler('test-team', 'busy-worker', () => ({
+      decision: 'approve',
+    }));
+
+    const result = await requestShutdown('test-team', 'lead-1', 'busy-worker', 5000);
+
+    expect(result.success).toBe(true);
+    expect(result.method).toBe('graceful');
+  });
+
+  it('teammate can reject shutdown with explanation (TM-20)', async () => {
+    await createTeam({ leadSessionId: 'lead-1', teamName: 'test-team' });
+    await spawnTeammate('test-team', 'lead-1', {
+      name: 'rejector',
+      spawnPrompt: 'test',
+    });
+
+    registerShutdownHandler('test-team', 'rejector', () => ({
+      decision: 'reject',
+      reason: 'Currently in the middle of a critical code review.',
+    }));
+
+    const result = await requestShutdown('test-team', 'lead-1', 'rejector', 3000);
+
+    expect(result.success).toBe(false);
+    expect(result.method).toBe('rejected');
+    expect(result.reason).toContain('critical code review');
+
+    // Process should still be running — clean up
+    const proc = getProcess('test-team', 'rejector');
+    if (proc) proc.process.kill('SIGTERM');
+  });
+
+  it('team config is updated after shutdown', async () => {
+    await createTeam({ leadSessionId: 'lead-1', teamName: 'test-team' });
+    await spawnTeammate('test-team', 'lead-1', {
+      name: 'config-check',
+      spawnPrompt: 'test',
+    });
+
+    registerShutdownHandler('test-team', 'config-check', () => ({
+      decision: 'approve',
+    }));
+
+    await requestShutdown('test-team', 'lead-1', 'config-check', 3000);
+
+    const statuses = getTeammateStatuses('test-team');
+    const worker = statuses.find((s) => s.name === 'config-check');
+    expect(worker!.status).toBe('stopped');
+
+    // Process should be unregistered
+    expect(getProcess('test-team', 'config-check')).toBeUndefined();
+  });
+});
+
+describe('forceShutdown', () => {
+  it('terminates unresponsive teammate', async () => {
+    // Spawn a process that ignores SIGTERM
+    setSpawnCommandBuilder((_teamName, options) => ({
+      command: process.execPath,
+      args: [
+        '-e',
+        `
+        process.stdin.resume();
+        process.on('SIGTERM', () => { /* ignore */ });
+        `,
+      ],
+      env: {
+        COPILOT_TEAMS_TEAMMATE: '1',
+        COPILOT_TEAMS_TEAM_NAME: _teamName,
+        COPILOT_TEAMS_TEAMMATE_NAME: options.name,
+      },
+    }));
+
+    await createTeam({ leadSessionId: 'lead-1', teamName: 'test-team' });
+    const proc = await spawnTeammate('test-team', 'lead-1', {
+      name: 'stubborn',
+      spawnPrompt: 'test',
+    });
+
+    await new Promise((r) => setTimeout(r, 100));
+
+    const result = await forceShutdown('test-team', 'lead-1', 'stubborn');
+
+    expect(result.success).toBe(true);
+    expect(result.method).toBe('forced');
+
+    // Wait for process to actually die
+    await new Promise<void>((resolve) => {
+      proc.process.on('exit', () => resolve());
+      setTimeout(() => resolve(), 500);
+    });
+
+    const statuses = getTeammateStatuses('test-team');
+    const stubborn = statuses.find((s) => s.name === 'stubborn');
+    expect(stubborn!.status).toBe('stopped');
   });
 });

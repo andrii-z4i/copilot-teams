@@ -289,3 +289,161 @@ function statusIcon(status: MemberStatus): string {
       return '❓';
   }
 }
+
+// ── Shutdown ──
+
+/** Default timeout (ms) before force-killing an unresponsive teammate. */
+const DEFAULT_SHUTDOWN_TIMEOUT = 10_000;
+
+export type ShutdownDecision = 'approve' | 'reject';
+
+export interface ShutdownResponse {
+  decision: ShutdownDecision;
+  reason?: string;
+}
+
+export interface ShutdownResult {
+  success: boolean;
+  teammateName: string;
+  method: 'graceful' | 'forced' | 'rejected';
+  reason?: string;
+}
+
+/** Teammate-side handler: decides whether to accept or reject shutdown. */
+export type ShutdownHandler = (teammateName: string) => ShutdownResponse | Promise<ShutdownResponse>;
+
+const shutdownHandlers = new Map<string, ShutdownHandler>();
+
+/**
+ * Register a shutdown handler for a teammate (teammate-side).
+ * Called when the Lead requests shutdown (TM-20).
+ */
+export function registerShutdownHandler(
+  teamName: string,
+  teammateName: string,
+  handler: ShutdownHandler,
+): void {
+  shutdownHandlers.set(processKey(teamName, teammateName), handler);
+}
+
+/**
+ * Unregister a shutdown handler.
+ */
+export function unregisterShutdownHandler(teamName: string, teammateName: string): void {
+  shutdownHandlers.delete(processKey(teamName, teammateName));
+}
+
+/**
+ * Request graceful shutdown of a teammate (TM-18, TM-19).
+ *
+ * 1. Sends shutdown request to teammate via handler.
+ * 2. Teammate can approve (graceful exit) or reject (with explanation) (TM-20).
+ * 3. If approved, waits for current operation to finish (TM-21).
+ * 4. Updates team config status to "stopped".
+ */
+export async function requestShutdown(
+  teamName: string,
+  leadSessionId: string,
+  teammateName: string,
+  timeoutMs: number = DEFAULT_SHUTDOWN_TIMEOUT,
+): Promise<ShutdownResult> {
+  const proc = getProcess(teamName, teammateName);
+
+  // Invoke teammate-side handler if registered (TM-20)
+  const handlerKey = processKey(teamName, teammateName);
+  const handler = shutdownHandlers.get(handlerKey);
+
+  if (handler) {
+    const response = await handler(teammateName);
+
+    if (response.decision === 'reject') {
+      return {
+        success: false,
+        teammateName,
+        method: 'rejected',
+        reason: response.reason ?? 'Teammate rejected shutdown request.',
+      };
+    }
+  }
+
+  // Proceed with graceful shutdown
+  if (proc) {
+    // Send SIGTERM and wait for process to exit (TM-21)
+    const exited = await waitForExit(proc, timeoutMs);
+
+    if (!exited) {
+      // Timeout — force kill
+      return forceShutdown(teamName, leadSessionId, teammateName);
+    }
+
+    unregisterProcess(teamName, teammateName);
+  }
+
+  // Update team config
+  await updateMemberStatus(teamName, leadSessionId, teammateName, 'stopped');
+  shutdownHandlers.delete(handlerKey);
+
+  return { success: true, teammateName, method: 'graceful' };
+}
+
+/**
+ * Wait for a process to exit within a timeout.
+ * Sends SIGTERM and waits.
+ */
+function waitForExit(proc: TeammateProcess, timeoutMs: number): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    let resolved = false;
+
+    const timer = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        resolve(false);
+      }
+    }, timeoutMs);
+
+    proc.process.on('exit', () => {
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timer);
+        resolve(true);
+      }
+    });
+
+    // Send SIGTERM for graceful exit
+    try {
+      proc.process.kill('SIGTERM');
+    } catch {
+      // Process may already be dead
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timer);
+        resolve(true);
+      }
+    }
+  });
+}
+
+/**
+ * Force-kill a teammate process (fallback for unresponsive teammates).
+ */
+export async function forceShutdown(
+  teamName: string,
+  leadSessionId: string,
+  teammateName: string,
+): Promise<ShutdownResult> {
+  const proc = getProcess(teamName, teammateName);
+
+  if (proc) {
+    try {
+      proc.process.kill('SIGKILL');
+    } catch {
+      // Already dead
+    }
+    unregisterProcess(teamName, teammateName);
+  }
+
+  await updateMemberStatus(teamName, leadSessionId, teammateName, 'stopped');
+  shutdownHandlers.delete(processKey(teamName, teammateName));
+
+  return { success: true, teammateName, method: 'forced' };
+}
