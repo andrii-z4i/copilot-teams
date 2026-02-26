@@ -136,12 +136,38 @@ Teammates operate under a **least-privilege model**. They start with minimum per
 | TS-11 | After finishing a task, a teammate SHOULD automatically pick up the next available task. |
 | TS-12 | Task claiming MUST use the Lead coordination (or equivalent mechanism) to prevent race conditions when multiple teammates attempt to claim the same task simultaneously. |
 
-#### 3.3.4 Task Sizing Guidance
+#### 3.3.4 Task Complexity Estimation
+
+Tasks are sized by complexity, not count. Teammates collectively estimate each task using a **planning poker** process, and the lead balances assignments based on capacity.
+
+**Complexity Sizes**
+
+| Size | Weight | Description |
+|------|--------|-------------|
+| **S** (Small) | 1 | Trivial change, well-understood, minimal risk |
+| **M** (Medium) | 1.33 | Moderate scope, some unknowns |
+| **L** (Large) | 2 | Significant scope, multiple unknowns or cross-cutting concerns |
+| **XL** (Extra Large) | 4 | High complexity, major unknowns, broad impact |
+
+**Capacity per Teammate per Iteration**
+
+Each teammate has a capacity of **4 weight points** per iteration (sprint). This means:
+
+- 1 XL task, **or**
+- 2 L tasks, **or**
+- 3 M tasks, **or**
+- 4 S tasks, **or**
+- any combination that does not exceed 4 points
 
 | ID | Requirement |
 |----|-------------|
-| TS-13 | The system SHOULD guide the lead toward appropriately sized tasks: self-contained units that produce a clear deliverable (a function, a test file, a review). |
-| TS-14 | The recommended ratio is 5–6 tasks per teammate. |
+| TS-13 | Each task MUST be assigned a complexity size: **S**, **M**, **L**, or **XL**. Tasks without a size MUST NOT be assigned to a teammate. |
+| TS-14 | Complexity MUST be estimated via **planning poker**: all teammates independently assess the task, and the **most frequently chosen size** (mode) is assigned. In case of a tie, the higher size MUST be used. |
+| TS-15 | The lead MUST facilitate the planning poker process before an iteration begins. Teammates MUST NOT see each other's estimates until all have submitted (to avoid anchoring bias). |
+| TS-16 | Each teammate MUST NOT be assigned tasks exceeding **4 weight points** per iteration (S=1, M=1.33, L=2, XL=4). |
+| TS-17 | The lead MUST balance task assignments across teammates so that total weight is distributed as evenly as possible. No teammate should be significantly over- or under-loaded relative to others. |
+| TS-18 | If a task is estimated as XL, the lead SHOULD consider whether it can be decomposed into smaller tasks before assigning it. |
+| TS-19 | Tasks SHOULD be self-contained units that produce a clear deliverable (a function, a test file, a review). |
 
 ---
 
