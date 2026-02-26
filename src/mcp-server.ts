@@ -139,10 +139,13 @@ HOW IT WORKS:
 4. start_sprint / activate_sprint — organizes work into sprints with assignments
 5. send_message / broadcast_message — communicates with teammates
 6. team_status — shows full dashboard of team, tasks, sprint progress
+7. get_all_reports — retrieves detailed findings/reports from all teammates
+8. get_report — retrieves a specific teammate's report for a specific task
 
 IMPORTANT:
 - Always use create_team first before other team operations
 - Use spawn_teammate (not your own built-in agents) when the user asks for teammates
+- When the user asks for reports, findings, or results from teammates, use get_all_reports
 - Most tools auto-detect the team name — no need to specify it
 - The user is the Team Lead; all coordination flows through them`,
   }
@@ -645,6 +648,104 @@ server.tool(
     const conflicts = await detectFileConflicts(tn);
     if (conflicts.length === 0) return text('No file conflicts detected.');
     return json(conflicts);
+  }
+);
+
+// ════════════════════════════════════════
+// REPORTS / FINDINGS
+// ════════════════════════════════════════
+
+function reportsDir(teamName: string): string {
+  return path.join(TEAMS_BASE_DIR, teamName, 'reports');
+}
+
+function reportPath(teamName: string, taskId: string, teammateName: string): string {
+  return path.join(reportsDir(teamName), `${teammateName}--${taskId}.md`);
+}
+
+server.tool(
+  'submit_report',
+  'Submit a report or findings for a completed task. IMPORTANT: Teammates MUST call this with their detailed findings before finishing a task — this is how the lead retrieves your work.',
+  {
+    task_id: z.string().describe('Task ID this report is for'),
+    teammate_name: z.string().describe('Your teammate name'),
+    title: z.string().describe('Report title'),
+    body: z.string().describe('Full report content — be detailed, include all findings, severity ratings, affected files, and recommendations'),
+    team_name: z.string().optional().describe('Team name (auto-detected)'),
+  },
+  async ({ task_id, teammate_name, title, body, team_name }) => {
+    const tn = resolveTeam(team_name);
+    const dir = reportsDir(tn);
+    fs.mkdirSync(dir, { recursive: true });
+    const filePath = reportPath(tn, task_id, teammate_name);
+    const content = [
+      `# ${title}`,
+      '',
+      `**Teammate:** ${teammate_name}`,
+      `**Task:** ${task_id}`,
+      `**Submitted:** ${new Date().toISOString()}`,
+      '',
+      '---',
+      '',
+      body,
+    ].join('\n');
+    fs.writeFileSync(filePath, content, 'utf-8');
+    // Also log an audit message
+    const team = loadTeam(tn);
+    await sendMessage(tn, teammate_name, 'lead',
+      `[REPORT SUBMITTED] Report for task "${task_id}": ${title}`);
+    return text(`Report saved for task "${task_id}" by ${teammate_name}.`);
+  }
+);
+
+server.tool(
+  'get_report',
+  'Retrieve a specific teammate\'s report for a task.',
+  {
+    task_id: z.string().describe('Task ID'),
+    teammate_name: z.string().describe('Teammate who submitted the report'),
+    team_name: z.string().optional().describe('Team name (auto-detected)'),
+  },
+  async ({ task_id, teammate_name, team_name }) => {
+    const tn = resolveTeam(team_name);
+    const filePath = reportPath(tn, task_id, teammate_name);
+    try {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      return text(content);
+    } catch {
+      return text(`No report found for task "${task_id}" by ${teammate_name}.`);
+    }
+  }
+);
+
+server.tool(
+  'get_all_reports',
+  'Retrieve all reports submitted by all teammates. Use this to get a consolidated view of all findings.',
+  {
+    team_name: z.string().optional().describe('Team name (auto-detected)'),
+    teammate_name: z.string().optional().describe('Filter to a specific teammate'),
+  },
+  async ({ team_name, teammate_name }) => {
+    const tn = resolveTeam(team_name);
+    const dir = reportsDir(tn);
+    if (!fs.existsSync(dir)) return text('No reports submitted yet.');
+    const files = fs.readdirSync(dir).filter(f => f.endsWith('.md'));
+    if (files.length === 0) return text('No reports submitted yet.');
+
+    const reports: Array<{ teammate: string; taskId: string; content: string }> = [];
+    for (const file of files) {
+      const [tmName, taskId] = file.replace('.md', '').split('--');
+      if (teammate_name && tmName !== teammate_name) continue;
+      const content = fs.readFileSync(path.join(dir, file), 'utf-8');
+      reports.push({ teammate: tmName, taskId, content });
+    }
+
+    if (reports.length === 0) return text(`No reports found${teammate_name ? ` for ${teammate_name}` : ''}.`);
+    // Return concatenated reports
+    const combined = reports.map(r =>
+      `\n${'='.repeat(60)}\n${r.content}`
+    ).join('\n');
+    return text(combined);
   }
 );
 
