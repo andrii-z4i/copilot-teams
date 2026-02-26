@@ -78,6 +78,21 @@ function saveLastTeam(name: string): void {
   fs.writeFileSync(LAST_TEAM_FILE, name, 'utf-8');
 }
 
+/**
+ * Resolve the sender identity for messages.
+ * If this MCP server is running inside a spawned teammate process,
+ * use the teammate name. Otherwise use the lead session ID.
+ */
+function resolveSender(team: { leadSessionId: string }): string {
+  const teammateName = process.env.COPILOT_TEAMS_TEAMMATE_NAME;
+  return teammateName || team.leadSessionId;
+}
+
+/** Check if this MCP server is running as a teammate (not the lead). */
+function isTeammate(): boolean {
+  return process.env.COPILOT_TEAMS_TEAMMATE === '1';
+}
+
 function listAllTeams(): Array<{ teamName: string; leadSessionId: string; members: number; createdAt: string }> {
   if (!fs.existsSync(TEAMS_BASE_DIR)) return [];
   const entries = fs.readdirSync(TEAMS_BASE_DIR, { withFileTypes: true });
@@ -227,6 +242,9 @@ server.tool(
       model,
       spawnPrompt: prompt,
     });
+    // Audit: log the spawn as a message
+    await sendMessage(tn, team.leadSessionId, name,
+      `[SPAWNED] You have been spawned as ${agent_type ?? 'coder'}. Instructions: ${prompt}`);
     const result: Record<string, unknown> = {
       name: tm.name,
       pid: tm.pid,
@@ -351,6 +369,10 @@ server.tool(
   async ({ task_id, teammate_name, team_name }) => {
     const tn = resolveTeam(team_name);
     const task = await assignTask(tn, task_id, teammate_name);
+    // Audit: log the assignment as a message from lead to teammate
+    const team = loadTeam(tn);
+    await sendMessage(tn, team.leadSessionId, teammate_name,
+      `[ASSIGNED] Task "${task_id}" (${task.title}) assigned to you.`);
     return json(task);
   }
 );
@@ -404,6 +426,18 @@ server.tool(
   async ({ sprint_number, assignments, team_name }) => {
     const tn = resolveTeam(team_name);
     const sprint = await activateSprint(tn, sprint_number, assignments);
+    // Audit: notify each teammate of their sprint assignments
+    const team = loadTeam(tn);
+    const byTeammate = new Map<string, string[]>();
+    for (const a of assignments) {
+      const list = byTeammate.get(a.teammate) ?? [];
+      list.push(`${a.taskId}: ${a.taskTitle} [${a.estimate}]`);
+      byTeammate.set(a.teammate, list);
+    }
+    for (const [teammate, tasks] of byTeammate) {
+      await sendMessage(tn, team.leadSessionId, teammate,
+        `[SPRINT ${sprint_number} ACTIVATED] Your assignments:\n${tasks.map(t => `- ${t}`).join('\n')}`);
+    }
     return json(sprint);
   }
 );
@@ -466,7 +500,8 @@ server.tool(
   async ({ to, body, team_name }) => {
     const tn = resolveTeam(team_name);
     const team = loadTeam(tn);
-    const msg = await sendMessage(tn, team.leadSessionId, to, body);
+    const from = resolveSender(team);
+    const msg = await sendMessage(tn, from, to, body);
     return json(msg);
   }
 );
@@ -481,7 +516,8 @@ server.tool(
   async ({ body, team_name }) => {
     const tn = resolveTeam(team_name);
     const team = loadTeam(tn);
-    const result = await broadcastMessage(tn, team.leadSessionId, body, team.members.length);
+    const from = resolveSender(team);
+    const result = await broadcastMessage(tn, from, body, team.members.length);
     return json(result);
   }
 );
@@ -570,6 +606,12 @@ server.tool(
   async ({ request_id, decision, feedback, team_name }) => {
     const tn = resolveTeam(team_name);
     const result = await reviewPlan(tn, request_id, decision, feedback);
+    // Audit: notify the teammate of the plan decision
+    const team = loadTeam(tn);
+    const decisionMsg = decision === 'approved'
+      ? `[PLAN APPROVED] Your plan (${request_id}) has been approved. Proceed with implementation.`
+      : `[PLAN REJECTED] Your plan (${request_id}) was rejected. Feedback: ${feedback ?? 'none'}`;
+    await sendMessage(tn, team.leadSessionId, result.teammateName, decisionMsg);
     return json(result);
   }
 );
