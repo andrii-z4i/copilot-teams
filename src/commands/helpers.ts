@@ -82,8 +82,24 @@ export function resolveTeamName(flags: Record<string, string>): string {
   const sole = findSoleTeam();
   if (sole) return sole;
 
+  // Check if any teams exist at all
+  try {
+    const entries = fs.readdirSync(TEAMS_BASE_DIR, { withFileTypes: true });
+    const teamDirs = entries.filter(
+      e => e.isDirectory() && fs.existsSync(path.join(TEAMS_BASE_DIR, e.name, 'config.json'))
+    );
+    if (teamDirs.length > 1) {
+      const names = teamDirs.map(e => e.name).join(', ');
+      throw new Error(
+        `Multiple teams found (${names}). Specify one with --team-name <name>.`
+      );
+    }
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith('Multiple teams')) throw e;
+  }
+
   throw new Error(
-    'No team specified and no active team found. Use --team-name or create a team first.'
+    'No teams exist. Create one first with: copilot-teams team create --session-id <id>'
   );
 }
 
