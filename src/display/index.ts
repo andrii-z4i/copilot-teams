@@ -7,6 +7,7 @@
  */
 
 import { readTaskList } from '../tasks/index.js';
+import { spawnSync } from 'node:child_process';
 
 // ── Types ──
 
@@ -170,6 +171,197 @@ export class InProcessDisplay {
         this.toggleTaskList();
         break;
     }
+  }
+}
+
+// ── Pane info ──
+
+export interface PaneInfo {
+  paneId: string;
+  teammateName: string;
+  command: string;
+}
+
+// ── Command executor abstraction (for testability) ──
+
+export type CommandExecutor = (
+  cmd: string,
+  args: string[]
+) => { exitCode: number; stdout: string; stderr: string };
+
+let commandExecutor: CommandExecutor | null = null;
+
+/** Inject a custom command executor (for testing). */
+export function setCommandExecutor(exec: CommandExecutor | null): void {
+  commandExecutor = exec;
+}
+
+function execCommand(
+  cmd: string,
+  args: string[]
+): { exitCode: number; stdout: string; stderr: string } {
+  if (commandExecutor) {
+    return commandExecutor(cmd, args);
+  }
+  const result = spawnSync(cmd, args, { encoding: 'utf-8' });
+  return {
+    exitCode: result.status ?? 1,
+    stdout: result.stdout ?? '',
+    stderr: result.stderr ?? '',
+  };
+}
+
+// ── TmuxDisplay ──
+
+export class TmuxDisplay {
+  private panes: PaneInfo[] = [];
+  private sessionName: string;
+
+  constructor(sessionName: string) {
+    this.sessionName = sessionName;
+  }
+
+  getSessionName(): string {
+    return this.sessionName;
+  }
+
+  getPanes(): PaneInfo[] {
+    return [...this.panes];
+  }
+
+  /**
+   * Create a tmux pane for a teammate running the given command.
+   * Returns the pane info. (DM-6)
+   */
+  createPane(teammateName: string, command: string): PaneInfo {
+    const args =
+      this.panes.length === 0
+        ? // First pane: create a new window
+          ['new-window', '-t', this.sessionName, '-n', teammateName, '-P', '-F', '#{pane_id}', command]
+        : // Subsequent panes: split the current window
+          ['split-window', '-t', this.sessionName, '-h', '-P', '-F', '#{pane_id}', command];
+
+    const result = execCommand('tmux', args);
+    const paneId = result.stdout.trim() || `%pane-${this.panes.length}`;
+
+    const pane: PaneInfo = { paneId, teammateName, command };
+    this.panes.push(pane);
+    return pane;
+  }
+
+  /**
+   * Create panes for multiple teammates at once.
+   * All panes are visible simultaneously (DM-7).
+   */
+  createPanes(teammates: Array<{ name: string; command: string }>): PaneInfo[] {
+    return teammates.map((t) => this.createPane(t.name, t.command));
+  }
+
+  /** Send a command string to a specific pane. */
+  sendToPane(paneId: string, text: string): void {
+    execCommand('tmux', ['send-keys', '-t', paneId, text, 'Enter']);
+  }
+
+  /** Rebalance pane layout so all are visible. */
+  rebalance(): void {
+    execCommand('tmux', ['select-layout', '-t', this.sessionName, 'tiled']);
+  }
+
+  /** Close all panes created by this display. */
+  close(): void {
+    for (const pane of this.panes) {
+      execCommand('tmux', ['kill-pane', '-t', pane.paneId]);
+    }
+    this.panes = [];
+  }
+}
+
+// ── ITermDisplay ──
+
+export class ITermDisplay {
+  private panes: PaneInfo[] = [];
+
+  getPanes(): PaneInfo[] {
+    return [...this.panes];
+  }
+
+  /**
+   * Create a split pane in iTerm2 using the `it2` CLI. (DM-8)
+   */
+  createPane(teammateName: string, command: string): PaneInfo {
+    const args = ['split-pane', '--command', command];
+    const result = execCommand('it2', args);
+    const paneId = result.stdout.trim() || `iterm-pane-${this.panes.length}`;
+
+    const pane: PaneInfo = { paneId, teammateName, command };
+    this.panes.push(pane);
+    return pane;
+  }
+
+  /**
+   * Create panes for multiple teammates. All visible simultaneously (DM-7).
+   */
+  createPanes(teammates: Array<{ name: string; command: string }>): PaneInfo[] {
+    return teammates.map((t) => this.createPane(t.name, t.command));
+  }
+
+  /** Close all panes. */
+  close(): void {
+    for (const pane of this.panes) {
+      execCommand('it2', ['close-pane', pane.paneId]);
+    }
+    this.panes = [];
+  }
+}
+
+// ── Terminal environment detection (DM-9) ──
+
+export type TerminalEnvironment = 'tmux' | 'iterm2' | 'unknown';
+
+// Overridable env reader for tests
+let envReader: (() => Record<string, string | undefined>) | null = null;
+let it2Checker: (() => boolean) | null = null;
+
+export function setEnvReader(reader: (() => Record<string, string | undefined>) | null): void {
+  envReader = reader;
+}
+
+export function setIt2Checker(checker: (() => boolean) | null): void {
+  it2Checker = checker;
+}
+
+/**
+ * Detect the current terminal environment. (DM-9)
+ * Checks $TMUX for tmux, then iTerm2 env vars / `it2` availability.
+ */
+export function detectTerminalEnvironment(): TerminalEnvironment {
+  const env = envReader ? envReader() : process.env;
+
+  // Check tmux first
+  if (env.TMUX) {
+    return 'tmux';
+  }
+
+  // Check iTerm2
+  if (env.ITERM_SESSION_ID || env.TERM_PROGRAM === 'iTerm.app') {
+    return 'iterm2';
+  }
+
+  // Check if it2 CLI is available
+  const it2Available = it2Checker ? it2Checker() : checkIt2Available();
+  if (it2Available) {
+    return 'iterm2';
+  }
+
+  return 'unknown';
+}
+
+function checkIt2Available(): boolean {
+  try {
+    const result = execCommand('which', ['it2']);
+    return result.exitCode === 0;
+  } catch {
+    return false;
   }
 }
 

@@ -532,24 +532,24 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 **Requirement IDs:** DM-6, DM-7, DM-8, DM-9, CM-10
 
-- [ ] Implement `TmuxDisplay` class:
+- [x] Implement `TmuxDisplay` class:
   - Create tmux window/panes for each teammate
   - Each pane runs an independent Copilot CLI process
   - Provide helper to send commands to specific panes
-- [ ] Implement `ITermDisplay` class:
+- [x] Implement `ITermDisplay` class:
   - Use `it2` CLI to create split panes in iTerm2
   - Each pane runs an independent Copilot CLI process
-- [ ] Implement `detectTerminalEnvironment()`:
+- [x] Implement `detectTerminalEnvironment()`:
   - Check `$TMUX` env var for tmux (DM-9)
   - Check iTerm2 env vars / `it2` availability (DM-9)
   - Return detected environment type
-- [ ] All panes visible simultaneously (DM-7)
-- [ ] User can click into a pane to view that teammate's output (CM-10)
-- [ ] Write unit tests:
-  - [ ] tmux panes are created correctly for N teammates
-  - [ ] iTerm2 panes are created via `it2` CLI
-  - [ ] Auto-detection picks tmux when `$TMUX` is set
-  - [ ] Auto-detection picks iTerm2 when available and not in tmux
+- [x] All panes visible simultaneously (DM-7)
+- [x] User can click into a pane to view that teammate's output (CM-10)
+- [x] Write unit tests:
+  - [x] tmux panes are created correctly for N teammates
+  - [x] iTerm2 panes are created via `it2` CLI
+  - [x] Auto-detection picks tmux when `$TMUX` is set
+  - [x] Auto-detection picks iTerm2 when available and not in tmux
 
 ---
 
