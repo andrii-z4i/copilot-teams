@@ -132,7 +132,7 @@ If a teammate does not exit gracefully within a configurable timeout after shutd
 | ID | Requirement |
 |----|-------------|
 | TS-1 | The system MUST maintain a shared, persistent task list per team. |
-| TS-2 | Task list MUST be stored at `~/.copilot/tasks/{team-name}/backlog.md`. |
+| TS-2 | Task list MUST be stored at `~/.copilot/teams/{team-name}/backlog.md`. |
 | TS-3 | All team members (lead and teammates) MUST be able to read the task list. |
 | TS-4 | Only the lead MUST be able to create, update, and delete tasks. Task management is done via communication from teammates to the Team Lead. |
 
@@ -205,7 +205,7 @@ A sprint:
 
 Sprint state MUST be stored at:
 
-    ~/.copilot/teams/sprint.md
+    ~/.copilot/teams/{team-name}/sprint.md
 
 Each sprint MUST be recorded as an append-only section with the following structure:
 
@@ -242,7 +242,7 @@ All messages are written by the Lead. Messaging is append-only.
 
 Messages MUST be stored at:
 
-    ~/.copilot/teams/messages.md
+    ~/.copilot/teams/{team-name}/messages.md
 
 Each message entry MUST include:
 
@@ -350,7 +350,7 @@ A teammate MAY submit at most three plan revisions per task. If three consecutiv
 
 File coordination MUST be stored at:
 
-    ~/.copilot/teams/files.md
+    ~/.copilot/teams/{team-name}/files.md
 
 Each entry MUST follow:
 
@@ -378,7 +378,7 @@ Each teammate MUST run as a subprocess managed by the Lead process, enabling cra
 | ID | Requirement |
 |----|-------------|
 | NF-10 | All team coordination (config, tasks, mailbox) MUST be stored and executed locally. No cloud orchestration layer is required. |
-| NF-11 | Team config, task lists, and mailbox state MUST be stored under well-known local paths (`~/.copilot/teams/`, `~/.copilot/tasks/`). |
+| NF-11 | Team config, task lists, and mailbox state MUST be stored under well-known local paths (`~/.copilot/teams/{team-name}/`). |
 
 ---
 
