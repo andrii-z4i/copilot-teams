@@ -582,32 +582,32 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 **Requirement IDs:** PA-1, PA-2, PA-3, PA-4, PA-5, PA-6
 
-- [ ] Implement teammate plan mode:
+- [x] Implement teammate plan mode:
   - Teammate enters read-only plan mode (PA-1)
   - In plan mode, teammate can explore code and produce a plan but MUST NOT modify files
   - Plan is stored as a structured document (Markdown)
-- [ ] Implement `submitPlanForApproval(teamName, teammateName, plan)`:
+- [x] Implement `submitPlanForApproval(teamName, teammateName, plan)`:
   - Teammate requests the Lead to record the plan approval request (PA-2)
   - Teammate blocks, awaiting response
-- [ ] Implement `reviewPlan(teamName, requestId, decision, feedback?)`:
+- [x] Implement `reviewPlan(teamName, requestId, decision, feedback?)`:
   - Lead approves → teammate exits plan mode and begins implementation (PA-5)
   - Lead rejects → teammate receives feedback, stays in plan mode, revises (PA-4)
-- [ ] Implement plan revision limit:
+- [x] Implement plan revision limit:
   - Track revision count per task per teammate
   - A teammate MAY submit at most **3 plan revisions** per task
   - If 3 consecutive plans are rejected, the task MUST return to the backlog and be reconsidered during next sprint planning
   - The teammate MAY remain idle for the remainder of the sprint
-- [ ] Implement lead approval criteria customization:
+- [x] Implement lead approval criteria customization:
   - User can set approval criteria via prompt to the lead (PA-6)
   - Lead uses criteria to make autonomous approval/rejection decisions
-- [ ] Write unit tests:
-  - [ ] Teammate in plan mode cannot write files
-  - [ ] Plan approval request is mediated by the Lead
-  - [ ] Approved plan transitions teammate to implementation mode
-  - [ ] Rejected plan keeps teammate in plan mode with feedback
-  - [ ] After 3 rejections, task returns to backlog
-  - [ ] After 3 rejections, teammate goes idle for remainder of sprint
-  - [ ] Lead can apply custom approval criteria
+- [x] Write unit tests:
+  - [x] Teammate in plan mode cannot write files
+  - [x] Plan approval request is mediated by the Lead
+  - [x] Approved plan transitions teammate to implementation mode
+  - [x] Rejected plan keeps teammate in plan mode with feedback
+  - [x] After 3 rejections, task returns to backlog
+  - [x] After 3 rejections, teammate goes idle for remainder of sprint
+  - [x] Lead can apply custom approval criteria
 
 ---
 
