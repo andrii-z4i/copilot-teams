@@ -1,0 +1,1 @@
+Create a team and add a task to review the code on the security vulnerabilities. Have 3 teammates: security engineer, quality engineer, reliability engineer. Ensure they look at code from different angles. Before sending them to work, share the list of tickets they will work on (ask Lead for tasks). And then share the estimates for each tasks they assigned.
