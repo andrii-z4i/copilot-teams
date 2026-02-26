@@ -60,7 +60,8 @@ export async function cmdTeam(args: string[]): Promise<void> {
     }
     case 'cleanup': {
       const teamName = resolveTeamName(flags);
-      const sessionId = resolveSessionId(flags);
+      const team = loadTeam(teamName);
+      const sessionId = flags['session-id'] ?? team.leadSessionId;
       await cleanupTeam(teamName, sessionId);
       console.log(`✓ Team ${teamName} cleaned up.`);
       break;

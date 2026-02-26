@@ -2,7 +2,7 @@
  * copilot-teams teammate — spawn, list, shutdown teammates.
  */
 
-import { parseFlags, resolveTeamName, resolveSessionId } from './helpers.js';
+import { parseFlags, resolveTeamName } from './helpers.js';
 import {
   spawnTeammate,
   getTeammateStatuses,
@@ -40,7 +40,8 @@ export async function cmdTeammate(args: string[]): Promise<void> {
   }
 
   const teamName = resolveTeamName(flags);
-  const sessionId = resolveSessionId(flags);
+  const team = loadTeam(teamName);
+  const sessionId = flags['session-id'] ?? team.leadSessionId;
 
   switch (sub) {
     case 'spawn': {
