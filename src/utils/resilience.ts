@@ -14,7 +14,9 @@ import {
   type SpawnOptions,
 } from '../teammate/index.js';
 import { resolvePath } from '../utils/index.js';
+import { TEAMS_BASE_DIR } from '../constants.js';
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import path from 'node:path';
 import type { MemberStatus } from '../types.js';
 
@@ -67,6 +69,70 @@ export function getCrashedTeammates(
 // ── Recovery (NF-8) ──
 
 /**
+ * Build a rich context prompt for respawning a teammate.
+ * Includes their assigned tasks, prior reports, and last messages.
+ */
+export function buildRespawnContext(
+  teamName: string,
+  originalName: string,
+  assignedTaskIds?: string[],
+): string {
+  const team = loadTeam(teamName);
+  const original = team.members.find((m) => m.name === originalName);
+
+  const lines: string[] = [
+    `You are a RESPAWNED teammate replacing "${originalName}" on team "${teamName}".`,
+    `Your predecessor stopped before finishing all work. Continue where they left off.`,
+    '',
+  ];
+
+  // Include assigned tasks and their status
+  if (assignedTaskIds && assignedTaskIds.length > 0) {
+    lines.push('ASSIGNED TASKS:');
+    for (const taskId of assignedTaskIds) {
+      lines.push(`- ${taskId}`);
+    }
+    lines.push('');
+  }
+
+  // Include prior reports
+  const reportsPath = path.join(TEAMS_BASE_DIR, teamName, 'reports');
+  try {
+    const files = fsSync.readdirSync(reportsPath);
+    const priorReports = files.filter(f => f.startsWith(`${originalName}--`) && f.endsWith('.md'));
+    if (priorReports.length > 0) {
+      lines.push('PRIOR REPORTS (already submitted — do NOT redo these tasks):');
+      for (const file of priorReports) {
+        const taskId = file.replace(`${originalName}--`, '').replace('.md', '');
+        lines.push(`- Task "${taskId}" — report already submitted ✓`);
+      }
+      lines.push('');
+    }
+  } catch { /* no reports dir */ }
+
+  // Include last messages from/to this teammate
+  try {
+    const messagesPath = path.join(TEAMS_BASE_DIR, teamName, 'messages.md');
+    const content = fsSync.readFileSync(messagesPath, 'utf-8');
+    const tmLines = content.split('\n').filter(l =>
+      l.includes(`[${originalName}]`) || l.includes(`] [${originalName}]`)
+    );
+    if (tmLines.length > 0) {
+      const recent = tmLines.slice(-5); // last 5 messages
+      lines.push('RECENT MESSAGES:');
+      for (const ml of recent) {
+        lines.push(`  ${ml.trim()}`);
+      }
+      lines.push('');
+    }
+  } catch { /* no messages */ }
+
+  lines.push('Focus on tasks that are NOT yet completed and have no report submitted.');
+
+  return lines.join('\n');
+}
+
+/**
  * Spawn a replacement teammate with the same task context.
  * The replacement inherits the original's name (with a suffix) and agent type.
  */
@@ -79,12 +145,14 @@ export async function spawnReplacement(
   const team = loadTeam(teamName);
   const original = team.members.find((m) => m.name === originalName);
 
-  const replacementName = options?.name ?? `${originalName}-replacement`;
+  const context = buildRespawnContext(teamName, originalName);
+  const basePrompt = options?.spawnPrompt ?? `Continue the work of ${originalName}.`;
+
   const spawnOpts: SpawnOptions = {
-    name: replacementName,
+    name: options?.name ?? originalName,
     agentType: original?.agentType ?? options?.agentType ?? 'coder',
     model: original?.model ?? options?.model,
-    spawnPrompt: options?.spawnPrompt ?? `Replacement for ${originalName}. Continue their work.`,
+    spawnPrompt: `${context}\n\n${basePrompt}`,
   };
 
   return spawnTeammate(teamName, leadSessionId, spawnOpts);

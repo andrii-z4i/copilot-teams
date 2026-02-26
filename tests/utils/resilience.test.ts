@@ -91,11 +91,11 @@ describe('replacement teammate (NF-8)', () => {
       { agentType: 'coder' }
     );
 
-    expect(replacement.name).toBe('tm-1-replacement');
+    expect(replacement.name).toBe('tm-1');
     expect(replacement.process).toBeDefined();
 
     const team = loadTeam(teamName);
-    const member = team.members.find((m) => m.name === 'tm-1-replacement');
+    const member = team.members.find((m) => m.name === 'tm-1');
     expect(member).toBeDefined();
     expect(member!.status).toBe('active');
   });
@@ -114,10 +114,10 @@ describe('replacement teammate (NF-8)', () => {
       'tm-original'
     );
 
-    expect(replacement.name).toBe('tm-original-replacement');
+    expect(replacement.name).toBe('tm-original');
     const team = loadTeam(teamName);
     const member = team.members.find(
-      (m) => m.name === 'tm-original-replacement'
+      (m) => m.name === 'tm-original'
     );
     expect(member!.agentType).toBe('reviewer');
   });

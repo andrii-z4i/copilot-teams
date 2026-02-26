@@ -20,7 +20,7 @@ import {
   requestShutdown,
   forceShutdown,
 } from './teammate/index.js';
-import { createTask, readTaskList, updateTask, deleteTask } from './tasks/index.js';
+import { createTask, createTasksBatch, readTaskList, updateTask, deleteTask } from './tasks/index.js';
 import { assignTask, claimNextTask } from './tasks/assignment.js';
 import {
   startSprint,
@@ -133,17 +133,21 @@ WHEN TO USE THESE TOOLS:
 - When the user asks about team status, task progress, or teammate activity
 
 HOW IT WORKS:
+For the SIMPLEST experience, use run_team — it handles everything in one call:
+  run_team — creates team, tasks, spawns teammates, runs sprint, monitors, auto-respawns, collects reports
+
+For step-by-step control:
 1. create_team — creates a team (user becomes the Lead)
-2. add_task — adds tasks to the backlog
+2. add_tasks (plural) — adds multiple tasks in one batch (faster than add_task for 3+ tasks)
 3. spawn_teammate — launches AI teammates with specific roles and instructions
 4. start_sprint / activate_sprint — organizes work into sprints with assignments
 5. send_message / broadcast_message — communicates with teammates
 6. team_status — shows full dashboard of team, tasks, sprint progress
 7. get_all_reports — retrieves detailed findings/reports from all teammates
-8. get_report — retrieves a specific teammate's report for a specific task
 
 IMPORTANT:
-- Always use create_team first before other team operations
+- Prefer run_team for most workflows — it handles auto-respawning crashed teammates
+- Use add_tasks (plural) instead of add_task when creating 3+ tasks — avoids lock contention
 - Use spawn_teammate (not your own built-in agents) when the user asks for teammates
 - When the user asks for reports, findings, or results from teammates, use get_all_reports
 - Most tools auto-detect the team name — no need to specify it
@@ -321,6 +325,31 @@ server.tool(
     const tn = resolveTeam(team_name);
     const task = await createTask(tn, { id, title, description: title, complexity: complexity ?? 'M', dependencies: depends_on ?? [] });
     return json(task);
+  }
+);
+
+server.tool(
+  'add_tasks',
+  'Add multiple tasks to the backlog in a single batch operation. Much faster than calling add_task repeatedly — use this when creating 3+ tasks.',
+  {
+    tasks: z.array(z.object({
+      id: z.string().describe('Unique task ID'),
+      title: z.string().describe('Task title'),
+      complexity: z.enum(['S', 'M', 'L', 'XL']).optional().describe('Complexity (default: M)'),
+      depends_on: z.array(z.string()).optional().describe('Dependency task IDs'),
+    })).describe('Array of tasks to create'),
+    team_name: z.string().optional().describe('Team name (auto-detected)'),
+  },
+  async ({ tasks: taskInputs, team_name }) => {
+    const tn = resolveTeam(team_name);
+    const created = await createTasksBatch(tn, taskInputs.map(t => ({
+      id: t.id,
+      title: t.title,
+      description: t.title,
+      complexity: t.complexity ?? 'M',
+      dependencies: t.depends_on ?? [],
+    })));
+    return json({ created: created.length, tasks: created });
   }
 );
 
@@ -746,6 +775,186 @@ server.tool(
       `\n${'='.repeat(60)}\n${r.content}`
     ).join('\n');
     return text(combined);
+  }
+);
+
+// ════════════════════════════════════════
+// AUTO-ORCHESTRATION
+// ════════════════════════════════════════
+
+import { spawnReplacement, buildRespawnContext } from './utils/resilience.js';
+import { getProcess, getAllProcesses } from './teammate/index.js';
+
+const respawnCounts = new Map<string, number>();
+const MAX_RESPAWNS = 3;
+
+/**
+ * Monitor a team and auto-respawn crashed/stopped teammates.
+ * Returns when all tasks are completed or max respawns exceeded.
+ */
+async function monitorAndRespawn(
+  teamName: string,
+  pollIntervalMs: number = 15000,
+  maxWaitMs: number = 600000,
+): Promise<{ completed: boolean; reason: string }> {
+  const startTime = Date.now();
+  const team = loadTeam(teamName);
+
+  while (Date.now() - startTime < maxWaitMs) {
+    await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+
+    // Check task completion
+    const tasks = readTaskList(teamName);
+    const incomplete = tasks.filter(t => t.status !== 'completed');
+    if (incomplete.length === 0) {
+      return { completed: true, reason: 'All tasks completed.' };
+    }
+
+    // Check for stopped/crashed teammates with incomplete tasks
+    const currentTeam = loadTeam(teamName);
+    for (const member of currentTeam.members) {
+      if (member.status !== 'stopped' && member.status !== 'crashed') continue;
+
+      const assignedTasks = tasks.filter(t => t.assignee === member.name && t.status !== 'completed');
+      if (assignedTasks.length === 0) continue;
+
+      // Check respawn count
+      const key = `${teamName}:${member.name}`;
+      const count = respawnCounts.get(key) ?? 0;
+      if (count >= MAX_RESPAWNS) {
+        await sendMessage(teamName, 'system', 'lead',
+          `[RESPAWN LIMIT] ${member.name} has been respawned ${MAX_RESPAWNS} times. Skipping.`);
+        continue;
+      }
+
+      // Auto-respawn with context
+      try {
+        const taskList = assignedTasks.map(t => `- ${t.id}: ${t.title} [${t.status}]`).join('\n');
+        await spawnReplacement(teamName, currentTeam.leadSessionId, member.name, {
+          spawnPrompt: `Complete these remaining tasks:\n${taskList}`,
+        });
+        respawnCounts.set(key, count + 1);
+        await sendMessage(teamName, 'system', 'lead',
+          `[AUTO-RESPAWN] ${member.name} respawned (attempt ${count + 1}/${MAX_RESPAWNS}). ` +
+          `Remaining tasks: ${assignedTasks.map(t => t.id).join(', ')}`);
+      } catch (err) {
+        await sendMessage(teamName, 'system', 'lead',
+          `[RESPAWN FAILED] Could not respawn ${member.name}: ${err}`);
+      }
+    }
+  }
+
+  return { completed: false, reason: `Timed out after ${maxWaitMs / 1000}s.` };
+}
+
+server.tool(
+  'run_team',
+  `Orchestrate a complete team workflow end-to-end: create tasks, spawn teammates, run a sprint, monitor progress, auto-respawn crashed teammates, and collect reports. This is the easiest way to run a parallel team — one tool call does everything.`,
+  {
+    tasks: z.array(z.object({
+      id: z.string().describe('Unique task ID'),
+      title: z.string().describe('Task title'),
+      complexity: z.enum(['S', 'M', 'L', 'XL']).optional().describe('Complexity (default: M)'),
+    })).describe('Tasks to complete'),
+    teammates: z.array(z.object({
+      name: z.string().describe('Teammate name'),
+      prompt: z.string().describe('Task instructions for this teammate'),
+      agent_type: z.string().optional().describe('Agent type (default: coder)'),
+      task_ids: z.array(z.string()).describe('Task IDs assigned to this teammate'),
+    })).describe('Teammates to spawn with their task assignments'),
+    team_name: z.string().optional().describe('Custom team name (auto-generated if omitted)'),
+    session_id: z.string().describe('Your session identifier'),
+    timeout_minutes: z.number().optional().describe('Max wait time in minutes (default: 10)'),
+  },
+  async ({ tasks: taskInputs, teammates, team_name, session_id, timeout_minutes }) => {
+    const timeoutMs = (timeout_minutes ?? 10) * 60 * 1000;
+    const results: string[] = [];
+
+    // 1. Create team
+    const team = await createTeam({ leadSessionId: session_id, teamName: team_name });
+    saveLastTeam(team.teamName);
+    results.push(`✓ Team created: ${team.teamName}`);
+
+    // 2. Batch create tasks
+    const created = await createTasksBatch(team.teamName, taskInputs.map(t => ({
+      id: t.id,
+      title: t.title,
+      description: t.title,
+      complexity: t.complexity ?? 'M',
+      dependencies: [],
+    })));
+    results.push(`✓ ${created.length} tasks created`);
+
+    // 3. Start sprint
+    const allTaskIds = created.map(t => t.id);
+    const sprint = await startSprint(team.teamName, 1, allTaskIds);
+
+    // 4. Spawn teammates and build assignments
+    const assignments: Array<{ teammate: string; taskId: string; taskTitle: string; estimate: 'S' | 'M' | 'L' | 'XL' }> = [];
+    for (const tm of teammates) {
+      await spawnTeammate(team.teamName, session_id, {
+        name: tm.name,
+        agentType: tm.agent_type ?? 'coder',
+        spawnPrompt: tm.prompt,
+      });
+      // Log spawn
+      await sendMessage(team.teamName, session_id, tm.name,
+        `[SPAWNED] Role: ${tm.agent_type ?? 'coder'}. Instructions: ${tm.prompt}`);
+
+      for (const taskId of tm.task_ids) {
+        const task = created.find(t => t.id === taskId);
+        if (task) {
+          assignments.push({
+            teammate: tm.name,
+            taskId: task.id,
+            taskTitle: task.title,
+            estimate: (task.complexity ?? 'M') as 'S' | 'M' | 'L' | 'XL',
+          });
+          await assignTask(team.teamName, task.id, tm.name);
+        }
+      }
+      results.push(`✓ Spawned ${tm.name} with ${tm.task_ids.length} tasks`);
+    }
+
+    // 5. Activate sprint
+    await activateSprint(team.teamName, 1, assignments);
+    results.push(`✓ Sprint 1 activated`);
+
+    // 6. Monitor progress with auto-respawn
+    results.push(`⏳ Monitoring progress (timeout: ${timeout_minutes ?? 10}min)...`);
+    const monitor = await monitorAndRespawn(team.teamName, 15000, timeoutMs);
+    results.push(monitor.completed ? `✓ ${monitor.reason}` : `⚠ ${monitor.reason}`);
+
+    // 7. Collect reports
+    const dir = reportsDir(team.teamName);
+    let reportSummary = 'No reports submitted.';
+    if (fs.existsSync(dir)) {
+      const files = fs.readdirSync(dir).filter(f => f.endsWith('.md'));
+      if (files.length > 0) {
+        const reports = files.map(f => {
+          const content = fs.readFileSync(path.join(dir, f), 'utf-8');
+          return content;
+        });
+        reportSummary = reports.join('\n\n' + '='.repeat(60) + '\n\n');
+        results.push(`✓ ${files.length} reports collected`);
+      }
+    }
+
+    // 8. Close sprint
+    try {
+      await closeSprint(team.teamName, 1);
+      results.push(`✓ Sprint 1 closed`);
+    } catch { /* may already be closed */ }
+
+    return text([
+      '## Team Run Complete',
+      '',
+      results.join('\n'),
+      '',
+      '## Reports',
+      '',
+      reportSummary,
+    ].join('\n'));
   }
 );
 

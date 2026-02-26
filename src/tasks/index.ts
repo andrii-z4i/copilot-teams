@@ -151,6 +151,41 @@ export async function createTask(
 }
 
 /**
+ * Create multiple tasks in a single lock acquisition.
+ * Much more efficient than calling createTask() N times in parallel.
+ */
+export async function createTasksBatch(
+  teamName: string,
+  taskInputs: Array<Omit<Task, 'status' | 'createdAt' | 'updatedAt'> & { status?: TaskStatus }>,
+): Promise<Task[]> {
+  const backlogPath = resolveTeamFile(teamName, 'backlog');
+
+  return withLock(backlogPath, () => {
+    const tasks = readTaskList(teamName);
+    const now = new Date().toISOString();
+    const created: Task[] = [];
+
+    for (const input of taskInputs) {
+      if (tasks.some((t) => t.id === input.id)) {
+        continue; // Skip duplicates silently in batch mode
+      }
+
+      const newTask: Task = {
+        ...input,
+        status: input.status ?? 'pending',
+        createdAt: now,
+        updatedAt: now,
+      };
+      tasks.push(newTask);
+      created.push(newTask);
+    }
+
+    writeTaskList(teamName, tasks);
+    return created;
+  });
+}
+
+/**
  * Internal: update a task without acquiring the lock.
  * Caller MUST hold the lock on backlog.md.
  */
