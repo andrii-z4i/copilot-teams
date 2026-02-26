@@ -216,7 +216,7 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 **Requirement IDs:** TM-1, TM-2, TM-3, TM-4, TM-5, TM-6
 
-- [ ] Implement `spawnTeammate(teamName, options)`:
+- [x] Implement `spawnTeammate(teamName, options)`:
   ```ts
   options: {
     name: string;
@@ -232,19 +232,19 @@ Before any feature work, establish the project structure, tooling, and shared in
     - Team membership info (team name, teammate name, lead info)
   - Register teammate in team config (update `members` array)
   - Do NOT carry over lead's conversation history (TM-5)
-- [ ] Implement `spawnMultipleTeammates(teamName, specs[])` — batch spawn N teammates (TM-2)
-- [ ] Implement `getTeammateStatus(teamName): TeammateStatus[]` — returns name, status, current task for each teammate (TM-6)
-- [ ] Implement `listActiveTeammates(teamName)` — formatted output for terminal display (TM-6)
-- [ ] Implement teammate process lifecycle tracking:
+- [x] Implement `spawnMultipleTeammates(teamName, specs[])` — batch spawn N teammates (TM-2)
+- [x] Implement `getTeammateStatus(teamName): TeammateStatus[]` — returns name, status, current task for each teammate (TM-6)
+- [x] Implement `listActiveTeammates(teamName)` — formatted output for terminal display (TM-6)
+- [x] Implement teammate process lifecycle tracking:
   - Track PID, status (spawning, active, idle, stopped, crashed)
   - Update team config on status changes
-- [ ] Write unit tests:
-  - [ ] Spawning creates a new process and registers in team config
-  - [ ] Spawn prompt is passed as initial context, not lead's history
-  - [ ] Model override is applied correctly
-  - [ ] Batch spawn creates N teammates
-  - [ ] `getTeammateStatus` returns correct statuses
-  - [ ] Project context (cwd, tools) is inherited by teammate
+- [x] Write unit tests:
+  - [x] Spawning creates a new process and registers in team config
+  - [x] Spawn prompt is passed as initial context, not lead's history
+  - [x] Model override is applied correctly
+  - [x] Batch spawn creates N teammates
+  - [x] `getTeammateStatus` returns correct statuses
+  - [x] Project context (cwd, tools) is inherited by teammate
 
 ---
 
