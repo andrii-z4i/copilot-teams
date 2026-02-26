@@ -166,45 +166,45 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 **Requirement IDs:** CM-1, CM-2, CM-3, CM-4, CM-5, CM-6, CM-7
 
-- [ ] Define message entry format (matching requirements):
+- [x] Define message entry format (matching requirements):
   ```
   [Timestamp] [MessageID] [FromID] [ToID|BROADCAST] [Body]
   ```
   - Message ID: monotonic counter (incrementing integer)
   - To: specific teammate ID or `BROADCAST`
-- [ ] Implement message storage:
+- [x] Implement message storage:
   - Single append-only file: `~/.copilot/teams/{team-name}/messages.md`
   - Only the Lead appends entries; teammates MUST NOT write to this file
-- [ ] Implement `appendMessage(teamName, from, to, body)` (Lead-only):
+- [x] Implement `appendMessage(teamName, from, to, body)` (Lead-only):
   - Validate caller is the Lead (enforce single-writer invariant)
   - Assign next monotonic message ID
   - Append formatted entry to `messages.md`
   - Use file locking to ensure atomic append
-- [ ] Implement teammate message request flow:
+- [x] Implement teammate message request flow:
   - Teammates request the Lead to send a message (CM-2, CM-3)
   - The Lead validates the request and calls `appendMessage` on their behalf
-- [ ] Implement `readMessages(teamName, recipientId, sinceId?)`:
+- [x] Implement `readMessages(teamName, recipientId, sinceId?)`:
   - Parse `messages.md` and filter by recipient (direct or BROADCAST)
   - Support reading only messages after a given ID (cursor-based)
   - Available to all team members (read-only)
-- [ ] Implement broadcast support:
+- [x] Implement broadcast support:
   - When `to === "BROADCAST"`, the message is visible to all members (CM-3)
   - Log a cost warning when broadcasting to large teams (CM-4)
-- [ ] Implement file-watcher–based push delivery (CM-5, CM-7):
+- [x] Implement file-watcher–based push delivery (CM-5, CM-7):
   - Use `fs.watch` or `chokidar` on `messages.md`
   - On file change, parse new entries and trigger callbacks for recipients
   - Lead receives messages automatically (push, not poll) (CM-7)
-- [ ] Implement `notifyLeadIdle(teamName, teammateName)` — teammate requests Lead to record idle notification (CM-6)
-- [ ] Write unit tests:
-  - [ ] Only the Lead can append messages (single-writer invariant enforced)
-  - [ ] Teammate message request is mediated by the Lead
-  - [ ] Point-to-point message is visible to correct recipient
-  - [ ] Broadcast message is visible to all members
-  - [ ] Broadcast triggers cost warning for large teams
-  - [ ] `readMessages` with cursor returns only messages after given ID
-  - [ ] File watcher triggers callback on new message
-  - [ ] Idle notification is recorded when teammate finishes
-  - [ ] Messages file is append-only (no deletions or modifications)
+- [x] Implement `notifyLeadIdle(teamName, teammateName)` — teammate requests Lead to record idle notification (CM-6)
+- [x] Write unit tests:
+  - [x] Only the Lead can append messages (single-writer invariant enforced)
+  - [x] Teammate message request is mediated by the Lead
+  - [x] Point-to-point message is visible to correct recipient
+  - [x] Broadcast message is visible to all members
+  - [x] Broadcast triggers cost warning for large teams
+  - [x] `readMessages` with cursor returns only messages after given ID
+  - [x] File watcher triggers callback on new message
+  - [x] Idle notification is recorded when teammate finishes
+  - [x] Messages file is append-only (no deletions or modifications)
 
 ---
 
