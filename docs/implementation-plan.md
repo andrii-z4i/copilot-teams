@@ -339,7 +339,7 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 **Requirement IDs:** TS-1, TS-2, TS-3, TS-4, TS-5, TS-6, TS-7, TS-8
 
-- [ ] Define `Task` interface:
+- [x] Define `Task` interface:
   ```ts
   {
     id: string;
@@ -353,31 +353,31 @@ Before any feature work, establish the project structure, tooling, and shared in
     updatedAt: string;
   }
   ```
-- [ ] Define `TaskList` (backlog) serialization format in Markdown:
+- [x] Define `TaskList` (backlog) serialization format in Markdown:
   - Human-readable markdown with YAML frontmatter per task
   - Stored at `~/.copilot/teams/{team-name}/backlog.md`
-- [ ] Implement `createTask(teamName, task)` — lead-only, add task to backlog (TS-4)
-- [ ] Implement `updateTask(teamName, taskId, updates)` — lead-only, update fields (TS-4)
-- [ ] Implement `deleteTask(teamName, taskId)` — lead-only (TS-4)
-- [ ] Implement `readTaskList(teamName): Task[]` — available to all members (TS-3)
-- [ ] Implement state transition logic:
+- [x] Implement `createTask(teamName, task)` — lead-only, add task to backlog (TS-4)
+- [x] Implement `updateTask(teamName, taskId, updates)` — lead-only, update fields (TS-4)
+- [x] Implement `deleteTask(teamName, taskId)` — lead-only (TS-4)
+- [x] Implement `readTaskList(teamName): Task[]` — available to all members (TS-3)
+- [x] Implement state transition logic:
   - `pending → in_progress` — when claimed/assigned
   - `in_progress → completed` — when teammate marks done
   - No backward transitions allowed
-- [ ] Implement dependency resolution:
+- [x] Implement dependency resolution:
   - `getBlockedTasks(tasks)` — tasks with unresolved dependencies (TS-7)
   - `getUnblockedTasks(tasks)` — pending tasks with all deps completed
   - When a task completes, re-evaluate blocked tasks and unblock if ready (TS-8)
-- [ ] Use file locking for concurrent access to `backlog.md` (NF-4)
-- [ ] Write unit tests:
-  - [ ] Task created with correct defaults (`status: pending`)
-  - [ ] Only lead can create/update/delete tasks
-  - [ ] Teammates can read task list
-  - [ ] State transitions work correctly (pending → in_progress → completed)
-  - [ ] Invalid transitions are rejected
-  - [ ] Dependency blocking works — task with incomplete deps is not unblocked
-  - [ ] Completing a dep automatically unblocks dependent tasks
-  - [ ] Concurrent reads/writes are safe with file locking
+- [x] Use file locking for concurrent access to `backlog.md` (NF-4)
+- [x] Write unit tests:
+  - [x] Task created with correct defaults (`status: pending`)
+  - [x] Only lead can create/update/delete tasks
+  - [x] Teammates can read task list
+  - [x] State transitions work correctly (pending → in_progress → completed)
+  - [x] Invalid transitions are rejected
+  - [x] Dependency blocking works — task with incomplete deps is not unblocked
+  - [x] Completing a dep automatically unblocks dependent tasks
+  - [x] Concurrent reads/writes are safe with file locking
 
 ---
 
