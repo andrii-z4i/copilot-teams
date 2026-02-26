@@ -5,6 +5,9 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
+  "bin": {
+    "copilot-teams": "dist/cli.js"
+  },
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
