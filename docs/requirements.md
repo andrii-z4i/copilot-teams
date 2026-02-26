@@ -31,6 +31,22 @@ The system targets the terminal-based Copilot CLI exclusively.
 | **Mailbox** | A messaging system that enables direct, point-to-point and broadcast communication between all team members. |
 | **Team Config** | Local configuration file describing team membership (names, agent IDs, types). Stored at a well-known path so any member can discover the team. |
 
+### 2.1 Single-Writer Coordination Invariant
+
+The Team Lead is the **only process allowed to write or mutate any shared coordination file**, including:
+
+- task list
+- sprint state
+- messages
+- file-claims
+- permission audit log
+
+Teammates MUST NOT directly write to shared coordination files.
+
+Teammates submit **requests** to the Team Lead, and the Lead performs all mutations atomically under lock.
+
+All shared coordination files MUST follow append-only semantics unless explicitly stated otherwise.
+
 ---
 
 ## 3. Functional Requirements
@@ -125,15 +141,15 @@ Teammates operate under a **least-privilege model**. They start with minimum per
 | TS-5 | Each task MUST have one of three states: `pending`, `in_progress`, `completed`. |
 | TS-6 | Tasks MAY have dependencies on other tasks. |
 | TS-7 | A `pending` task with unresolved dependencies MUST NOT be claimable until all dependencies are `completed`. |
-| TS-8 | When a teammate completes a task that other tasks depend on, blocked tasks MUST unblock automatically. |
+| TS-8 | When a task's dependencies become completed, unblocking MUST occur via the Team Lead. The Lead guarantees atomic task state transitions. |
 
 #### 3.3.3 Task Assignment & Claiming
 
 | ID | Requirement |
 |----|-------------|
 | TS-9 | The lead MUST be able to explicitly assign a task to a specific teammate. |
-| TS-10 | Teammates MUST be able to self-claim the next unassigned, unblocked `pending` task by telling the Lead about it. |
-| TS-11 | After finishing a task, a teammate SHOULD automatically pick up the next available task. |
+| TS-10 | Teammates request task claims via the Lead. The Lead performs the atomic claim operation to prevent race conditions. |
+| TS-11 | Teammates MUST only work on tasks assigned to them within the current sprint. When a teammate completes all assigned tasks, it MUST remain idle until the next sprint begins. |
 | TS-12 | Task claiming MUST use the Lead coordination (or equivalent mechanism) to prevent race conditions when multiple teammates attempt to claim the same task simultaneously. |
 
 #### 3.3.4 Task Complexity Estimation
