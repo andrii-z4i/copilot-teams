@@ -29,10 +29,108 @@ All coordination happens locally via the file system — no cloud services, no n
 ```bash
 npm install
 npm run build
-npm link          # makes 'copilot-teams' available globally
+npm link          # makes 'copilot-teams' and 'copilot-teams-mcp' available globally
 ```
 
-## Quick Start
+## Usage: MCP Server (Recommended)
+
+The easiest way to use copilot-teams is through GitHub Copilot CLI's MCP integration. Instead of memorizing commands, just talk naturally — Copilot calls the right tools for you.
+
+### Setup
+
+Add the MCP server to your Copilot CLI config:
+
+**Option A — Repo-level** (`.copilot/mcp.json` in your project):
+
+```json
+{
+  "mcpServers": {
+    "copilot-teams": {
+      "type": "stdio",
+      "command": "copilot-teams-mcp"
+    }
+  }
+}
+```
+
+**Option B — User-level** (`~/.copilot/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "copilot-teams": {
+      "type": "stdio",
+      "command": "copilot-teams-mcp"
+    }
+  }
+}
+```
+
+> If you haven't run `npm link`, use the full path:
+> `"command": "node", "args": ["/path/to/copilot-teams/dist/mcp-server.js"]`
+
+### Natural Language Examples
+
+Once configured, just talk to GitHub Copilot CLI:
+
+```
+You: "Create a team for this project"
+→ Copilot calls create_team
+
+You: "Add three tasks: auth module, API routes, and tests"
+→ Copilot calls add_task × 3
+
+You: "Spin up two coders — one for auth, one for API"
+→ Copilot calls spawn_teammate × 2
+
+You: "Start sprint 1 with all pending tasks"
+→ Copilot calls start_sprint
+
+You: "What's the team status?"
+→ Copilot calls team_status
+
+You: "Shut everyone down and clean up"
+→ Copilot calls shutdown_teammate × N, then cleanup_team
+```
+
+### Available MCP Tools (26)
+
+| Tool | Description |
+|------|-------------|
+| `create_team` | Create a new team (you become the Lead) |
+| `list_teams` | List all teams |
+| `show_team` | Show team details and members |
+| `cleanup_team` | Remove a team and its data |
+| `spawn_teammate` | Spawn a new AI teammate process |
+| `list_teammates` | List teammates and their status |
+| `shutdown_teammate` | Graceful teammate shutdown |
+| `force_stop_teammate` | Force-stop unresponsive teammate |
+| `add_task` | Add a task to the backlog |
+| `list_tasks` | List tasks (optionally filter by status) |
+| `update_task` | Update task status/title/complexity |
+| `assign_task` | Assign a task to a teammate |
+| `delete_task` | Remove a task |
+| `start_sprint` | Start a new sprint with selected tasks |
+| `activate_sprint` | Activate sprint with task assignments |
+| `close_sprint` | Close sprint, return unfinished tasks |
+| `show_sprint` | Show current or specific sprint |
+| `list_sprints` | List all sprints |
+| `send_message` | Send message to a specific teammate |
+| `broadcast_message` | Broadcast to all teammates |
+| `read_messages` | Read messages (all or filtered) |
+| `team_status` | Full dashboard: team, tasks, sprint, files |
+| `list_pending_plans` | Plans awaiting your approval |
+| `review_plan` | Approve or reject a teammate's plan |
+| `list_file_claims` | Active file ownership claims |
+| `detect_file_conflicts` | Check for file conflicts |
+
+Most tools auto-detect the team name — no need to specify `team_name` if only one team exists.
+
+## Usage: Direct CLI
+
+You can also use copilot-teams directly from the command line:
+
+### Quick Start
 
 ### 1. Create a team
 
