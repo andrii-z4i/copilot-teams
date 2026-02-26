@@ -101,13 +101,34 @@ function defaultSpawnCommandBuilder(
   options: SpawnOptions,
   _teamConfig: TeamConfig,
 ): { command: string; args: string[]; env?: Record<string, string> } {
-  const args: string[] = [];
+  // Build teammate context that gets prepended to the user's prompt
+  const teammateContext = [
+    `You are teammate "${options.name}" on team "${teamName}".`,
+    `Role: ${options.agentType ?? 'coder'}.`,
+    '',
+    'TEAM COMMUNICATION (use copilot-teams MCP tools):',
+    `- Use send_message to report progress or ask questions (to: "lead", team_name: "${teamName}")`,
+    `- Use update_task to mark tasks in_progress or completed (team_name: "${teamName}")`,
+    `- Use list_tasks to see your assigned tasks (team_name: "${teamName}")`,
+    `- Use claim_file before editing files to avoid conflicts (team_name: "${teamName}")`,
+    '',
+    'When you finish your work, send a message to "lead" summarizing what you did.',
+    '',
+    'YOUR TASK:',
+  ].join('\n');
+
+  const fullPrompt = `${teammateContext}\n${options.spawnPrompt}`;
+
+  const args: string[] = [
+    '-p', fullPrompt,
+    '--autopilot',
+    '--allow-all',
+  ];
 
   if (options.model) {
     args.push('--model', options.model);
   }
 
-  // Spawn prompt is passed via stdin after launch
   return {
     command: 'copilot',
     args,
@@ -218,11 +239,6 @@ export async function spawnTeammate(
 
   // Update status to active with PID
   await updateMemberStatus(teamName, leadSessionId, options.name, 'active', pid);
-
-  // Send spawn prompt via stdin (TM-5: task-specific context, no lead history)
-  if (child.stdin) {
-    child.stdin.write(options.spawnPrompt + '\n');
-  }
 
   // Monitor process exit for crash detection
   child.on('exit', async (code, signal) => {

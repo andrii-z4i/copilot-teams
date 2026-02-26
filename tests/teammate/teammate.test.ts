@@ -25,7 +25,9 @@ let originalTeamsBaseDir: string;
 let tmpBase: string;
 
 /**
- * Configure spawn to use a simple Node.js script that reads stdin and stays alive.
+ * Configure spawn to use a simple Node.js script that stays alive.
+ * The real spawn passes the prompt via -p flag in args; the test builder
+ * receives it via the spawnPrompt in options and echoes it via stdout.
  */
 function setupTestSpawnBuilder() {
   setSpawnCommandBuilder((_teamName, options, _config) => ({
@@ -33,10 +35,8 @@ function setupTestSpawnBuilder() {
     args: [
       '-e',
       `
-      process.stdin.resume();
-      process.stdin.on('data', (d) => {
-        process.stdout.write('GOT: ' + d.toString());
-      });
+      const prompt = process.env.COPILOT_TEAMS_SPAWN_PROMPT || '';
+      process.stdout.write('GOT: ' + prompt + '\\n');
       process.stdout.write('READY:' + process.env.COPILOT_TEAMS_TEAMMATE_NAME + '\\n');
       setTimeout(() => process.exit(0), 5000);
       `,
@@ -45,6 +45,7 @@ function setupTestSpawnBuilder() {
       COPILOT_TEAMS_TEAMMATE: '1',
       COPILOT_TEAMS_TEAM_NAME: _teamName,
       COPILOT_TEAMS_TEAMMATE_NAME: options.name,
+      COPILOT_TEAMS_SPAWN_PROMPT: options.spawnPrompt,
     },
   }));
 }
