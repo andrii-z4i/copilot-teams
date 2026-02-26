@@ -682,14 +682,14 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 **Requirement IDs:** NF-1, NF-2, NF-3
 
-- [ ] Document token usage scaling in user-facing help/docs (NF-1)
-- [ ] Implement `warnTeamSize(n)` — warn user before creating large teams (NF-2):
+- [x] Document token usage scaling in user-facing help/docs (NF-1)
+- [x] Implement `warnTeamSize(n)` — warn user before creating large teams (NF-2):
   - Threshold: warn if N > 5 teammates
   - Require user confirmation to proceed
-- [ ] Implement broadcast cost warning (NF-3) — already part of mailbox (CM-4), ensure it's visible to user
-- [ ] Write unit tests:
-  - [ ] Warning triggers for team size > 5
-  - [ ] Warning does NOT trigger for team size ≤ 5
+- [x] Implement broadcast cost warning (NF-3) — already part of mailbox (CM-4), ensure it's visible to user
+- [x] Write unit tests:
+  - [x] Warning triggers for team size > 5
+  - [x] Warning does NOT trigger for team size ≤ 5
 
 ---
 
