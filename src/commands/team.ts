@@ -2,8 +2,11 @@
  * copilot-teams team — create, show, cleanup teams.
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
 import { parseFlags, resolveSessionId, resolveTeamName, printKV, saveLastTeam } from './helpers.js';
-import { createTeam, loadTeam, cleanupTeam, getActiveTeam } from '../team/index.js';
+import { createTeam, loadTeam, cleanupTeam } from '../team/index.js';
+import { TEAMS_BASE_DIR } from '../constants.js';
 import { warnTeamSize } from '../utils/cost.js';
 
 const HELP = `
@@ -11,6 +14,7 @@ Usage: copilot-teams team <subcommand> [options]
 
 Subcommands:
   create   Create a new team (you become the Lead)
+  list     List all teams
   show     Show team config
   cleanup  Remove team directory (all teammates must be stopped)
 
@@ -55,6 +59,26 @@ export async function cmdTeam(args: string[]): Promise<void> {
         for (const m of team.members) {
           console.log(`  ${m.name} [${m.status}] (${m.agentType}) pid=${m.pid ?? '-'}`);
         }
+      }
+      break;
+    }
+    case 'list':
+    case 'ls': {
+      if (!fs.existsSync(TEAMS_BASE_DIR)) {
+        console.log('No teams.');
+        return;
+      }
+      const entries = fs.readdirSync(TEAMS_BASE_DIR, { withFileTypes: true });
+      const teams = entries.filter(
+        e => e.isDirectory() && fs.existsSync(path.join(TEAMS_BASE_DIR, e.name, 'config.json'))
+      );
+      if (teams.length === 0) {
+        console.log('No teams.');
+        return;
+      }
+      for (const entry of teams) {
+        const t = loadTeam(entry.name);
+        console.log(`${t.teamName}  lead=${t.leadSessionId}  members=${t.members.length}  created=${t.createdAt}`);
       }
       break;
     }
