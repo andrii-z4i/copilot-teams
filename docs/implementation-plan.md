@@ -457,8 +457,8 @@ Before any feature work, establish the project structure, tooling, and shared in
 
 **Requirement IDs:** TS-11, §3.3.5 (Sprint Lifecycle)
 
-- [ ] Define sprint states: `planning`, `active`, `closed`
-- [ ] Implement sprint state file at `~/.copilot/teams/{team-name}/sprint.md`:
+- [x] Define sprint states: `planning`, `active`, `closed`
+- [x] Implement sprint state file at `~/.copilot/teams/{team-name}/sprint.md`:
   - Append-only format — each sprint is a new section:
     ```
     Sprint #[Number]
@@ -470,31 +470,31 @@ Before any feature work, establish the project structure, tooling, and shared in
     ```
   - Closed sprint sections MUST NOT be modified
   - Only the Lead may append to this file (single-writer invariant)
-- [ ] Implement `startSprint(teamName, sprintNumber)`:
+- [x] Implement `startSprint(teamName, sprintNumber)`:
   - Lead selects tasks from backlog for the sprint
   - Initiates planning poker for estimation (integrates with R11)
   - Sets sprint status to `planning`
-- [ ] Implement `activateSprint(teamName, sprintNumber)`:
+- [x] Implement `activateSprint(teamName, sprintNumber)`:
   - After estimation and assignment are complete, transition to `active`
   - Teammates begin working on assigned tasks
-- [ ] Implement `closeSprint(teamName, sprintNumber)`:
+- [x] Implement `closeSprint(teamName, sprintNumber)`:
   - Triggered when all tasks assigned for the sprint are completed
   - Set sprint status to `closed` with closing timestamp
   - Unfinished tasks return to backlog for next sprint
-- [ ] Implement `getCurrentSprint(teamName)`:
+- [x] Implement `getCurrentSprint(teamName)`:
   - Parse `sprint.md` and return the latest non-closed sprint
   - Return null if no active sprint
-- [ ] Implement sprint constraint enforcement:
+- [x] Implement sprint constraint enforcement:
   - Teammates MUST only work on tasks assigned within the current sprint (TS-11)
   - When a teammate completes all assigned sprint tasks, it remains idle until next sprint
-- [ ] Write unit tests:
-  - [ ] Sprint file is created with correct format
-  - [ ] Sprint transitions: planning → active → closed
-  - [ ] Closed sprint sections are immutable (append-only)
-  - [ ] Only Lead can write to sprint file
-  - [ ] `getCurrentSprint` returns active sprint
-  - [ ] Teammate cannot work on tasks outside current sprint
-  - [ ] Sprint closure returns unfinished tasks to backlog
+- [x] Write unit tests:
+  - [x] Sprint file is created with correct format
+  - [x] Sprint transitions: planning → active → closed
+  - [x] Closed sprint sections are immutable (append-only)
+  - [x] Only Lead can write to sprint file
+  - [x] `getCurrentSprint` returns active sprint
+  - [x] Teammate cannot work on tasks outside current sprint
+  - [x] Sprint closure returns unfinished tasks to backlog
 
 ---
 
