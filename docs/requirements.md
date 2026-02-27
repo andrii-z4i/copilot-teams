@@ -455,3 +455,53 @@ The system SHOULD embed these practices into the lead's coordination behavior:
 ## Appendix A: Reference
 
 This requirements document is based on the [Claude Code Agent Teams](https://code.claude.com/docs/en/agent-teams) architecture, adapted for the GitHub Copilot CLI ecosystem.
+
+---
+
+## Appendix B: Additional Implemented Features
+
+The following capabilities were implemented beyond the original requirements above. They are documented here for completeness.
+
+### B.1 Batch Task Creation
+
+| ID | Feature |
+|----|---------|
+| EX-1 | The MCP server provides an `add_tasks` tool for batch-creating multiple tasks in a single call, reducing round-trips when seeding a backlog. |
+
+### B.2 Report Submission & Retrieval
+
+| ID | Feature |
+|----|---------|
+| EX-2 | Teammates can submit detailed findings reports per task via `submit_report`. Reports are stored as Markdown files under `~/.copilot/teams/{team-name}/reports/`. |
+| EX-3 | The Lead can retrieve individual reports (`get_report`) or a consolidated view of all reports (`get_all_reports`). |
+
+### B.3 Auto-Orchestration
+
+| ID | Feature |
+|----|---------|
+| EX-4 | The `run_team` MCP tool provides end-to-end orchestration: task creation, teammate spawning, sprint execution, automatic crash recovery (with respawn up to 3 retries), and report collection — all in a single tool call. |
+
+### B.4 MCP Server Integration
+
+| ID | Feature |
+|----|---------|
+| EX-5 | The system exposes all coordination operations as 46 MCP tools via `copilot-teams-mcp`, enabling natural-language-driven orchestration through GitHub Copilot CLI. |
+| EX-6 | Most MCP tools auto-detect the active team name, reducing the need for explicit parameters. |
+
+### B.5 Extended Plan Approval Tools
+
+| ID | Feature |
+|----|---------|
+| EX-7 | The MCP server exposes `enter_plan_mode`, `submit_plan`, and `set_approval_criteria` as standalone tools, in addition to the `list_pending_plans` and `review_plan` tools from the original requirements. |
+
+### B.6 File Claim Tools
+
+| ID | Feature |
+|----|---------|
+| EX-8 | `claim_file` and `release_file` are exposed as MCP tools, allowing teammates to explicitly request and release file ownership through the Lead. |
+
+### B.7 Permission Management Tools
+
+| ID | Feature |
+|----|---------|
+| EX-9 | The MCP server provides `request_permission`, `review_permission`, `read_audit_log`, and `list_pending_permissions` as dedicated tools for the full permission lifecycle. |
