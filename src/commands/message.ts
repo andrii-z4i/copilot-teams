@@ -3,6 +3,7 @@
  */
 
 import { parseFlags, resolveTeamName } from './helpers.js';
+import { loadTeam } from '../team/index.js';
 import { sendMessage, broadcastMessage, readMessages, readAllMessages } from '../comms/index.js';
 
 const HELP = `
@@ -30,6 +31,8 @@ export async function cmdMessage(args: string[]): Promise<void> {
   }
 
   const teamName = resolveTeamName(flags);
+  const team = loadTeam(teamName);
+  const tid = team.teamId;
   const from = flags['from'] ?? 'lead';
 
   switch (sub) {
@@ -40,14 +43,14 @@ export async function cmdMessage(args: string[]): Promise<void> {
         console.error('Usage: copilot-teams msg send <to> <message>');
         process.exit(1);
       }
-      const msg = await sendMessage(teamName, from, to, body);
+      const msg = await sendMessage(tid, from, to, body);
       console.log(`✓ Message #${msg.id} sent to ${to}.`);
       break;
     }
     case 'broadcast': {
       const body = positional.slice(1).join(' ');
       if (!body) { console.error('Usage: copilot-teams msg broadcast <message>'); process.exit(1); }
-      const result = await broadcastMessage(teamName, from, body);
+      const result = await broadcastMessage(tid, from, body);
       console.log(`✓ Broadcast #${result.message.id} sent.`);
       if (result.costWarning) {
         console.warn(`⚠ ${result.costWarning}`);
@@ -58,7 +61,7 @@ export async function cmdMessage(args: string[]): Promise<void> {
       const recipient = positional[1];
       if (!recipient) { console.error('Usage: copilot-teams msg read <recipient>'); process.exit(1); }
       const sinceId = flags['since'] ? Number(flags['since']) : 0;
-      const msgs = readMessages(teamName, recipient, sinceId);
+      const msgs = readMessages(tid, recipient, sinceId);
       if (msgs.length === 0) {
         console.log(`No messages for ${recipient}.`);
         return;
@@ -70,7 +73,7 @@ export async function cmdMessage(args: string[]): Promise<void> {
     }
     case 'list':
     case 'ls': {
-      const msgs = readAllMessages(teamName);
+      const msgs = readAllMessages(tid);
       if (msgs.length === 0) {
         console.log('No messages.');
         return;

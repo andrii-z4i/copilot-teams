@@ -24,26 +24,26 @@ const messageCounters = new Map<string, number>();
 /**
  * Get the next message ID for a team, initializing from file if needed.
  */
-function getNextMessageId(teamName: string): number {
-  if (messageCounters.has(teamName)) {
-    const next = messageCounters.get(teamName)! + 1;
-    messageCounters.set(teamName, next);
+function getNextMessageId(teamId: string): number {
+  if (messageCounters.has(teamId)) {
+    const next = messageCounters.get(teamId)! + 1;
+    messageCounters.set(teamId, next);
     return next;
   }
 
   // Initialize from file
-  const messages = readAllMessages(teamName);
+  const messages = readAllMessages(teamId);
   const maxId = messages.reduce((max, m) => Math.max(max, m.id), 0);
   const next = maxId + 1;
-  messageCounters.set(teamName, next);
+  messageCounters.set(teamId, next);
   return next;
 }
 
 /**
  * Reset counter for a team (useful for testing).
  */
-export function resetMessageCounter(teamName: string): void {
-  messageCounters.delete(teamName);
+export function resetMessageCounter(teamId: string): void {
+  messageCounters.delete(teamId);
 }
 
 // ── Message Parsing ──
@@ -71,7 +71,7 @@ function formatMessage(msg: Message): string {
  * Enforces single-writer invariant via caller validation.
  */
 export async function appendMessage(
-  teamName: string,
+  teamId: string,
   from: string,
   to: string,
   body: string,
@@ -84,13 +84,13 @@ export async function appendMessage(
     );
   }
 
-  const messagesPath = resolveTeamFile(teamName, 'messages');
+  const messagesPath = resolveTeamFile(teamId, 'messages');
 
   // Sanitize body: replace newlines with spaces to prevent message injection
   const sanitizedBody = body.replace(/[\r\n]+/g, ' ');
 
   return withLock(messagesPath, () => {
-    const id = getNextMessageId(teamName);
+    const id = getNextMessageId(teamId);
     const timestamp = new Date().toISOString();
 
     const message: Message = { id, timestamp, from, to, body: sanitizedBody };
@@ -106,8 +106,8 @@ export async function appendMessage(
 /**
  * Read all messages from the team's messages file.
  */
-export function readAllMessages(teamName: string): Message[] {
-  const messagesPath = resolveTeamFile(teamName, 'messages');
+export function readAllMessages(teamId: string): Message[] {
+  const messagesPath = resolveTeamFile(teamId, 'messages');
   if (!fs.existsSync(messagesPath)) return [];
 
   const content = fs.readFileSync(messagesPath, 'utf-8');
@@ -123,11 +123,11 @@ export function readAllMessages(teamName: string): Message[] {
  * Supports cursor-based reading via sinceId.
  */
 export function readMessages(
-  teamName: string,
+  teamId: string,
   recipientId: string,
   sinceId?: number,
 ): Message[] {
-  const all = readAllMessages(teamName);
+  const all = readAllMessages(teamId);
   return all.filter((m) => {
     // Filter by recipient: direct message or broadcast
     const isForRecipient = m.to === recipientId || m.to === 'BROADCAST';
@@ -141,12 +141,12 @@ export function readMessages(
  * Send a direct message from one member to another (Lead-mediated).
  */
 export async function sendMessage(
-  teamName: string,
+  teamId: string,
   from: string,
   to: string,
   body: string,
 ): Promise<Message> {
-  return appendMessage(teamName, from, to, body, true);
+  return appendMessage(teamId, from, to, body, true);
 }
 
 /**
@@ -154,7 +154,7 @@ export async function sendMessage(
  * Logs a cost warning for large teams.
  */
 export async function broadcastMessage(
-  teamName: string,
+  teamId: string,
   from: string,
   body: string,
   teamSize?: number,
@@ -167,7 +167,7 @@ export async function broadcastMessage(
       'increasing token usage proportionally.';
   }
 
-  const message = await appendMessage(teamName, from, 'BROADCAST', body, true);
+  const message = await appendMessage(teamId, from, 'BROADCAST', body, true);
   return { message, costWarning };
 }
 
@@ -175,11 +175,11 @@ export async function broadcastMessage(
  * Record an idle notification from a teammate (Lead-mediated, CM-6).
  */
 export async function notifyLeadIdle(
-  teamName: string,
+  teamId: string,
   teammateName: string,
 ): Promise<Message> {
   return appendMessage(
-    teamName,
+    teamId,
     teammateName,
     'lead',
     `[IDLE] Teammate ${teammateName} has finished all tasks and is now idle.`,
@@ -205,11 +205,11 @@ const watchers = new Map<string, WatcherState>();
  * Push-based delivery — no polling required.
  */
 export function watchMessages(
-  teamName: string,
+  teamId: string,
   recipientId: string,
   callback: MessageCallback,
 ): () => void {
-  const messagesPath = resolveTeamFile(teamName, 'messages');
+  const messagesPath = resolveTeamFile(teamId, 'messages');
   ensureDir(path.dirname(messagesPath));
 
   // Ensure file exists for watcher
@@ -217,20 +217,20 @@ export function watchMessages(
     fs.writeFileSync(messagesPath, '', 'utf-8');
   }
 
-  let state = watchers.get(teamName);
+  let state = watchers.get(teamId);
 
   if (!state) {
-    const existingMessages = readAllMessages(teamName);
+    const existingMessages = readAllMessages(teamId);
     const lastId = existingMessages.reduce((max, m) => Math.max(max, m.id), 0);
 
     const watcher = fs.watch(messagesPath, () => {
-      const st = watchers.get(teamName);
+      const st = watchers.get(teamId);
       if (st?.debounceTimer) clearTimeout(st.debounceTimer);
       const timer = setTimeout(() => {
-        const currentState = watchers.get(teamName);
+        const currentState = watchers.get(teamId);
         if (!currentState) return;
 
-        const newMessages = readAllMessages(teamName).filter(
+        const newMessages = readAllMessages(teamId).filter(
           (m) => m.id > currentState.lastId,
         );
         if (newMessages.length === 0) return;
@@ -244,25 +244,25 @@ export function watchMessages(
           if (relevant.length > 0) cb(relevant);
         }
       }, 50);
-      const st2 = watchers.get(teamName);
+      const st2 = watchers.get(teamId);
       if (st2) st2.debounceTimer = timer;
     });
 
     state = { watcher, lastId, callbacks: new Map(), debounceTimer: null };
-    watchers.set(teamName, state);
+    watchers.set(teamId, state);
   }
 
   state.callbacks.set(recipientId, callback);
 
   // Return unsubscribe function
   return () => {
-    const s = watchers.get(teamName);
+    const s = watchers.get(teamId);
     if (!s) return;
     s.callbacks.delete(recipientId);
     if (s.callbacks.size === 0) {
       if (s.debounceTimer) clearTimeout(s.debounceTimer);
       s.watcher.close();
-      watchers.delete(teamName);
+      watchers.delete(teamId);
     }
   };
 }
@@ -270,11 +270,11 @@ export function watchMessages(
 /**
  * Stop all watchers for a team.
  */
-export function stopWatching(teamName: string): void {
-  const state = watchers.get(teamName);
+export function stopWatching(teamId: string): void {
+  const state = watchers.get(teamId);
   if (state) {
     if (state.debounceTimer) clearTimeout(state.debounceTimer);
     state.watcher.close();
-    watchers.delete(teamName);
+    watchers.delete(teamId);
   }
 }

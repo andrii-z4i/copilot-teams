@@ -4,7 +4,7 @@
 
 import fs from 'node:fs';
 import crypto from 'node:crypto';
-import { resolvePath, resolveTeamFile, ensureTeamDir, atomicWriteFile, withLock } from '../utils/index.js';
+import { resolveTeamFile, ensureTeamDir, atomicWriteFile, withLock } from '../utils/index.js';
 import { TEAMS_BASE_DIR } from '../constants.js';
 import type { TeamConfig, TeamMember, MemberStatus } from '../types.js';
 
@@ -60,28 +60,52 @@ export function generateTeamName(): string {
 
 // ── Persistence ──
 
-function configPath(teamName: string): string {
-  return resolveTeamFile(teamName, 'config');
+function configPath(teamId: string): string {
+  return resolveTeamFile(teamId, 'config');
 }
 
 /**
- * Load and parse a team config from disk.
+ * Load and parse a team config from a specific team directory.
+ * The directory name is the teamId (UUID).
  */
-export function loadTeam(teamName: string): TeamConfig {
-  const filePath = configPath(teamName);
+export function loadTeamByDir(dirName: string): TeamConfig {
+  const filePath = resolveTeamFile(dirName, 'config');
   if (!fs.existsSync(filePath)) {
-    throw new Error(`Team "${teamName}" not found at ${filePath}`);
+    throw new Error(`Team directory "${dirName}" has no config at ${filePath}`);
   }
   const raw = fs.readFileSync(filePath, 'utf-8');
   return JSON.parse(raw) as TeamConfig;
 }
 
 /**
+ * Load and parse a team config by human-readable team name.
+ * Scans all team directories (named by teamId) to find the matching config.
+ */
+export function loadTeam(teamName: string): TeamConfig {
+  if (!fs.existsSync(TEAMS_BASE_DIR)) {
+    throw new Error(`Team "${teamName}" not found`);
+  }
+  const entries = fs.readdirSync(TEAMS_BASE_DIR, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    try {
+      const config = loadTeamByDir(entry.name);
+      if (config.teamName === teamName) {
+        return config;
+      }
+    } catch {
+      // Skip invalid/corrupt team dirs
+    }
+  }
+  throw new Error(`Team "${teamName}" not found`);
+}
+
+/**
  * Persist a team config to disk atomically.
  */
 export function saveTeam(config: TeamConfig): void {
-  ensureTeamDir(config.teamName);
-  atomicWriteFile(configPath(config.teamName), JSON.stringify(config, null, 2));
+  ensureTeamDir(config.teamId);
+  atomicWriteFile(configPath(config.teamId), JSON.stringify(config, null, 2));
 }
 
 // ── Active Team Discovery ──
@@ -98,7 +122,7 @@ export function getActiveTeam(leadSessionId: string): TeamConfig | null {
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     try {
-      const config = loadTeam(entry.name);
+      const config = loadTeamByDir(entry.name);
       if (config.leadSessionId === leadSessionId) {
         return config;
       }
@@ -149,7 +173,7 @@ export function assertNotTeammate(sessionId: string): void {
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     try {
-      const config = loadTeam(entry.name);
+      const config = loadTeamByDir(entry.name);
       const isMember = config.members.some(
         (m) => m.agentId === sessionId && config.leadSessionId !== sessionId,
       );
@@ -187,9 +211,11 @@ export async function createTeam(options: CreateTeamOptions): Promise<TeamConfig
   assertNotTeammate(leadSessionId);
   assertNoActiveTeam(leadSessionId);
 
+  const teamId = crypto.randomUUID();
   const teamName = customName ?? generateTeamName();
 
   const config: TeamConfig = {
+    teamId,
     teamName,
     leadSessionId,
     createdAt: new Date().toISOString(),
@@ -199,9 +225,9 @@ export async function createTeam(options: CreateTeamOptions): Promise<TeamConfig
     })),
   };
 
-  // Persist under lock
-  const lockPath = resolveTeamFile(teamName, 'config');
-  ensureTeamDir(teamName);
+  // Persist under lock — directory is named by teamId
+  const lockPath = resolveTeamFile(teamId, 'config');
+  ensureTeamDir(teamId);
 
   await withLock(lockPath, () => {
     saveTeam(config);
@@ -220,12 +246,13 @@ export async function updateTeam(
   leadSessionId: string,
   updater: (config: TeamConfig) => TeamConfig,
 ): Promise<TeamConfig> {
-  const lockPath = resolveTeamFile(teamName, 'config');
+  const config = loadTeam(teamName);
+  const lockPath = resolveTeamFile(config.teamId, 'config');
 
   return withLock(lockPath, () => {
-    const config = loadTeam(teamName);
-    assertIsLead(leadSessionId, config);
-    const updated = updater(config);
+    const current = loadTeamByDir(config.teamId);
+    assertIsLead(leadSessionId, current);
+    const updated = updater(current);
     saveTeam(updated);
     return updated;
   });
@@ -257,7 +284,9 @@ export interface CleanupResult {
 }
 
 /**
- * Clean up a team — remove all shared resources (TL-6, TL-7, TL-8).
+ * Clean up a team — removes the team config so the team is no longer active,
+ * but preserves all artifact files (backlog, messages, sprint, reports, etc.)
+ * for future audit (TL-6, TL-7, TL-8).
  * Fails if any teammates are still running.
  */
 export async function cleanupTeam(
@@ -281,9 +310,10 @@ export async function cleanupTeam(
     };
   }
 
-  // TL-8: Remove entire team directory
-  const teamDirPath = resolvePath(teamName);
-  fs.rmSync(teamDirPath, { recursive: true, force: true });
+  // TL-8: Remove only the team config so the team is no longer discoverable,
+  // while preserving all artifact files (backlog, messages, sprint, reports, etc.)
+  const configFilePath = resolveTeamFile(config.teamId, 'config');
+  fs.rmSync(configFilePath, { force: true });
 
   return { success: true, teamName };
 }

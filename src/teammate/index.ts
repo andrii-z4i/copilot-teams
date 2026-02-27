@@ -276,7 +276,7 @@ export async function spawnTeammate(
       if (newStatus === 'crashed') {
         try {
           const { notifyCrash } = await import('../utils/resilience.js');
-          await notifyCrash(teamName, {
+          await notifyCrash(teamConfig.teamId, {
             teammateName: options.name,
             exitCode: code,
             signal: signal,

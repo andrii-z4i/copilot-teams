@@ -12,7 +12,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 
 // ── Library imports ──
-import { createTeam, loadTeam, cleanupTeam } from './team/index.js';
+import { createTeam, loadTeam, loadTeamByDir, cleanupTeam } from './team/index.js';
 import {
   spawnTeammate,
   getTeammateStatuses,
@@ -70,8 +70,9 @@ const LAST_TEAM_FILE = path.join(TEAMS_BASE_DIR, '.last-team');
 function readLastTeam(): string | null {
   try {
     const name = fs.readFileSync(LAST_TEAM_FILE, 'utf-8').trim();
-    if (name && fs.existsSync(path.join(TEAMS_BASE_DIR, name, 'config.json'))) {
-      return name;
+    if (name) {
+      // Verify the team still exists by scanning for it
+      try { loadTeam(name); return name; } catch { /* team no longer exists */ }
     }
   } catch { /* missing */ }
   return null;
@@ -83,7 +84,10 @@ function findSoleTeam(): string | null {
     const teamDirs = entries.filter(
       e => e.isDirectory() && fs.existsSync(path.join(TEAMS_BASE_DIR, e.name, 'config.json'))
     );
-    if (teamDirs.length === 1) return teamDirs[0].name;
+    if (teamDirs.length === 1) {
+      const config = loadTeamByDir(teamDirs[0].name);
+      return config.teamName;
+    }
   } catch { /* missing */ }
   return null;
 }
@@ -95,6 +99,11 @@ function resolveTeam(teamName?: string): string {
   const sole = findSoleTeam();
   if (sole) return sole;
   throw new Error('No teams exist. Create one first with the create_team tool.');
+}
+
+/** Resolve team name and load config, returning teamId for path-based operations. */
+function resolveTeamId(teamName?: string): string {
+  return safeLoadTeam(resolveTeam(teamName)).teamId;
 }
 
 function saveLastTeam(name: string): void {
@@ -124,7 +133,7 @@ function listAllTeams(): Array<{ teamName: string; leadSessionId: string; member
   for (const e of entries) {
     if (!e.isDirectory()) continue;
     try {
-      const t = loadTeam(e.name);
+      const t = loadTeamByDir(e.name);
       results.push({ teamName: t.teamName, leadSessionId: t.leadSessionId, members: t.members.length, createdAt: t.createdAt });
     } catch { /* skip */ }
   }
@@ -285,6 +294,7 @@ server.tool(
     }
     const tn = resolveTeam(team_name);
     const team = safeLoadTeam(tn);
+    const tid = team.teamId;
     const warning = warnTeamSize(team.members.length + 1);
     const tm = await spawnTeammate(tn, team.leadSessionId, {
       name,
@@ -293,7 +303,7 @@ server.tool(
       spawnPrompt: prompt,
     });
     // Audit: log the spawn as a message
-    await sendMessage(tn, team.leadSessionId, name,
+    await sendMessage(team.teamId, team.leadSessionId, name,
       `[SPAWNED] You have been spawned as ${agent_type ?? 'coder'}. Instructions: ${prompt}`);
     const result: Record<string, unknown> = {
       name: tm.name,
@@ -313,6 +323,7 @@ server.tool(
   },
   async ({ team_name }) => {
     const tn = resolveTeam(team_name);
+    const tid = resolveTeamId(team_name);
     const statuses = getTeammateStatuses(tn);
     if (statuses.length === 0) return text('No teammates. Spawn one with spawn_teammate.');
     return json(statuses);
@@ -334,6 +345,7 @@ server.tool(
     }
     const tn = resolveTeam(team_name);
     const team = safeLoadTeam(tn);
+    const tid = team.teamId;
     const result = await requestShutdown(tn, team.leadSessionId, teammate_name, timeout_ms);
     return json(result);
   }
@@ -352,6 +364,7 @@ server.tool(
     }
     const tn = resolveTeam(team_name);
     const team = safeLoadTeam(tn);
+    const tid = team.teamId;
     const result = await forceShutdown(tn, team.leadSessionId, teammate_name);
     return json(result);
   }
@@ -376,7 +389,8 @@ server.tool(
       return text('Error: This operation is restricted to the Team Lead.');
     }
     const tn = resolveTeam(team_name);
-    const task = await createTask(tn, { id, title, description: title, complexity: complexity ?? 'M', dependencies: depends_on ?? [] });
+    const tid = resolveTeamId(team_name);
+    const task = await createTask(tid, { id, title, description: title, complexity: complexity ?? 'M', dependencies: depends_on ?? [] });
     return json(task);
   }
 );
@@ -398,7 +412,8 @@ server.tool(
       return text('Error: This operation is restricted to the Team Lead.');
     }
     const tn = resolveTeam(team_name);
-    const created = await createTasksBatch(tn, taskInputs.map(t => ({
+    const tid = resolveTeamId(team_name);
+    const created = await createTasksBatch(tid, taskInputs.map(t => ({
       id: t.id,
       title: t.title,
       description: t.title,
@@ -418,7 +433,8 @@ server.tool(
   },
   async ({ team_name, status }) => {
     const tn = resolveTeam(team_name);
-    let tasks = readTaskList(tn);
+    const tid = resolveTeamId(team_name);
+    let tasks = readTaskList(tid);
     if (status) tasks = tasks.filter(t => t.status === status);
     if (tasks.length === 0) return text('No tasks in backlog.');
     return json(tasks);
@@ -437,11 +453,12 @@ server.tool(
   },
   async ({ task_id, status, title, complexity, team_name }) => {
     const tn = resolveTeam(team_name);
+    const tid = resolveTeamId(team_name);
     const updates: Record<string, unknown> = {};
     if (status) updates.status = status;
     if (title) updates.title = title;
     if (complexity) updates.complexity = complexity;
-    const task = await updateTask(tn, task_id, updates);
+    const task = await updateTask(tid, task_id, updates);
     return json(task);
   }
 );
@@ -459,10 +476,12 @@ server.tool(
       return text('Error: This operation is restricted to the Team Lead.');
     }
     const tn = resolveTeam(team_name);
-    const task = await assignTask(tn, task_id, teammate_name);
+    const tid = resolveTeamId(team_name);
+    const task = await assignTask(tid, task_id, teammate_name);
     // Audit: log the assignment as a message from lead to teammate
     const team = safeLoadTeam(tn);
-    await sendMessage(tn, team.leadSessionId, teammate_name,
+    const tid = team.teamId;
+    await sendMessage(tid, team.leadSessionId, teammate_name,
       `[ASSIGNED] Task "${task_id}" (${task.title}) assigned to you.`);
     return json(task);
   }
@@ -480,7 +499,8 @@ server.tool(
       return text('Error: This operation is restricted to the Team Lead.');
     }
     const tn = resolveTeam(team_name);
-    await deleteTask(tn, task_id);
+    const tid = resolveTeamId(team_name);
+    await deleteTask(tid, task_id);
     return text(`Task "${task_id}" deleted.`);
   }
 );
@@ -502,7 +522,8 @@ server.tool(
       return text('Error: This operation is restricted to the Team Lead.');
     }
     const tn = resolveTeam(team_name);
-    const sprint = await startSprint(tn, sprint_number, task_ids);
+    const tid = resolveTeamId(team_name);
+    const sprint = await startSprint(tid, sprint_number, task_ids);
     return json(sprint);
   }
 );
@@ -525,9 +546,11 @@ server.tool(
       return text('Error: This operation is restricted to the Team Lead.');
     }
     const tn = resolveTeam(team_name);
-    const sprint = await activateSprint(tn, sprint_number, assignments);
+    const tid = resolveTeamId(team_name);
+    const sprint = await activateSprint(tid, sprint_number, assignments);
     // Audit: notify each teammate of their sprint assignments
     const team = safeLoadTeam(tn);
+    const tid = team.teamId;
     const byTeammate = new Map<string, string[]>();
     for (const a of assignments) {
       const list = byTeammate.get(a.teammate) ?? [];
@@ -535,7 +558,7 @@ server.tool(
       byTeammate.set(a.teammate, list);
     }
     for (const [teammate, tasks] of byTeammate) {
-      await sendMessage(tn, team.leadSessionId, teammate,
+      await sendMessage(tid, team.leadSessionId, teammate,
         `[SPRINT ${sprint_number} ACTIVATED] Your assignments:\n${tasks.map(t => `- ${t}`).join('\n')}`);
     }
     return json(sprint);
@@ -554,7 +577,8 @@ server.tool(
       return text('Error: This operation is restricted to the Team Lead.');
     }
     const tn = resolveTeam(team_name);
-    const result = await closeSprint(tn, sprint_number);
+    const tid = resolveTeamId(team_name);
+    const result = await closeSprint(tid, sprint_number);
     return json(result);
   }
 );
@@ -568,7 +592,8 @@ server.tool(
   },
   async ({ sprint_number, team_name }) => {
     const tn = resolveTeam(team_name);
-    const sprint = sprint_number ? getSprint(tn, sprint_number) : getCurrentSprint(tn);
+    const tid = resolveTeamId(team_name);
+    const sprint = sprint_number ? getSprint(tid, sprint_number) : getCurrentSprint(tid);
     if (!sprint) return text('No sprint found.');
     return json(sprint);
   }
@@ -582,7 +607,8 @@ server.tool(
   },
   async ({ team_name }) => {
     const tn = resolveTeam(team_name);
-    const sprints = readSprints(tn);
+    const tid = resolveTeamId(team_name);
+    const sprints = readSprints(tid);
     if (sprints.length === 0) return text('No sprints yet.');
     return json(sprints);
   }
@@ -603,8 +629,9 @@ server.tool(
   async ({ to, body, team_name }) => {
     const tn = resolveTeam(team_name);
     const team = safeLoadTeam(tn);
+    const tid = team.teamId;
     const from = resolveSender(team);
-    const msg = await sendMessage(tn, from, to, body);
+    const msg = await sendMessage(tid, from, to, body);
     return json(msg);
   }
 );
@@ -619,8 +646,9 @@ server.tool(
   async ({ body, team_name }) => {
     const tn = resolveTeam(team_name);
     const team = safeLoadTeam(tn);
+    const tid = team.teamId;
     const from = resolveSender(team);
-    const result = await broadcastMessage(tn, from, body, team.members.length);
+    const result = await broadcastMessage(tid, from, body, team.members.length);
     return json(result);
   }
 );
@@ -634,7 +662,8 @@ server.tool(
   },
   async ({ recipient_id, team_name }) => {
     const tn = resolveTeam(team_name);
-    const msgs = recipient_id ? readMessages(tn, recipient_id) : readAllMessages(tn);
+    const tid = resolveTeamId(team_name);
+    const msgs = recipient_id ? readMessages(tid, recipient_id) : readAllMessages(tid);
     if (msgs.length === 0) return text('No messages.');
     return json(msgs);
   }
@@ -653,11 +682,12 @@ server.tool(
   async ({ team_name }) => {
     const tn = resolveTeam(team_name);
     const team = safeLoadTeam(tn);
-    const tasks = readTaskList(tn);
+    const tid = team.teamId;
+    const tasks = readTaskList(tid);
     const statuses = getTeammateStatuses(tn);
-    const sprint = getCurrentSprint(tn);
+    const sprint = getCurrentSprint(tid);
     let claims: Awaited<ReturnType<typeof getActiveFileClaims>> = [];
-    try { claims = await getActiveFileClaims(tn); } catch { /* no claims file */ }
+    try { claims = await getActiveFileClaims(tid); } catch { /* no claims file */ }
 
     return json({
       team: {
@@ -691,7 +721,8 @@ server.tool(
   },
   async ({ team_name }) => {
     const tn = resolveTeam(team_name);
-    const plans = await getPendingPlans(tn);
+    const tid = resolveTeamId(team_name);
+    const plans = await getPendingPlans(tid);
     if (plans.length === 0) return text('No pending plans.');
     return json(plans);
   }
@@ -711,13 +742,15 @@ server.tool(
       return text('Error: This operation is restricted to the Team Lead.');
     }
     const tn = resolveTeam(team_name);
-    const result = await reviewPlan(tn, request_id, decision, feedback);
+    const tid = resolveTeamId(team_name);
+    const result = await reviewPlan(tid, request_id, decision, feedback);
     // Audit: notify the teammate of the plan decision
     const team = safeLoadTeam(tn);
+    const tid = team.teamId;
     const decisionMsg = decision === 'approved'
       ? `[PLAN APPROVED] Your plan (${request_id}) has been approved. Proceed with implementation.`
       : `[PLAN REJECTED] Your plan (${request_id}) was rejected. Feedback: ${feedback ?? 'none'}`;
-    await sendMessage(tn, team.leadSessionId, result.teammateName, decisionMsg);
+    await sendMessage(tid, team.leadSessionId, result.teammateName, decisionMsg);
     return json(result);
   }
 );
@@ -733,7 +766,8 @@ server.tool(
   },
   async ({ teammate_name, task_id, plan, team_name }) => {
     const tn = resolveTeam(team_name);
-    const request = await submitPlanForApproval(tn, teammate_name, task_id, plan);
+    const tid = resolveTeamId(team_name);
+    const request = await submitPlanForApproval(tid, teammate_name, task_id, plan);
     return json(request);
   }
 );
@@ -748,7 +782,8 @@ server.tool(
   },
   async ({ teammate_name, task_id, team_name }) => {
     const tn = resolveTeam(team_name);
-    const state = await enterPlanMode(tn, teammate_name, task_id);
+    const tid = resolveTeamId(team_name);
+    const state = await enterPlanMode(tid, teammate_name, task_id);
     return json(state);
   }
 );
@@ -763,7 +798,8 @@ server.tool(
   async ({ description, team_name }) => {
     if (isTeammate()) return text('Error: This operation is restricted to the Team Lead.');
     const tn = resolveTeam(team_name);
-    await setApprovalCriteria(tn, { description });
+    const tid = resolveTeamId(team_name);
+    await setApprovalCriteria(tid, { description });
     return text('Approval criteria updated.');
   }
 );
@@ -780,7 +816,8 @@ server.tool(
   },
   async ({ team_name }) => {
     const tn = resolveTeam(team_name);
-    const claims = await getActiveFileClaims(tn);
+    const tid = resolveTeamId(team_name);
+    const claims = await getActiveFileClaims(tid);
     if (claims.length === 0) return text('No active file claims.');
     return json(claims);
   }
@@ -794,7 +831,8 @@ server.tool(
   },
   async ({ team_name }) => {
     const tn = resolveTeam(team_name);
-    const conflicts = await detectFileConflicts(tn);
+    const tid = resolveTeamId(team_name);
+    const conflicts = await detectFileConflicts(tid);
     if (conflicts.length === 0) return text('No file conflicts detected.');
     return json(conflicts);
   }
@@ -811,7 +849,8 @@ server.tool(
   },
   async ({ file_path, teammate_name, task_id, team_name }) => {
     const tn = resolveTeam(team_name);
-    const claim = await claimFile(tn, teammate_name, task_id, file_path);
+    const tid = resolveTeamId(team_name);
+    const claim = await claimFile(tid, teammate_name, task_id, file_path);
     return json(claim);
   }
 );
@@ -827,7 +866,8 @@ server.tool(
   },
   async ({ file_path, teammate_name, task_id, team_name }) => {
     const tn = resolveTeam(team_name);
-    const claim = await releaseFile(tn, teammate_name, task_id, file_path);
+    const tid = resolveTeamId(team_name);
+    const claim = await releaseFile(tid, teammate_name, task_id, file_path);
     return json(claim);
   }
 );
@@ -836,12 +876,12 @@ server.tool(
 // REPORTS / FINDINGS
 // ════════════════════════════════════════
 
-function reportsDir(teamName: string): string {
-  return path.join(TEAMS_BASE_DIR, teamName, 'reports');
+function reportsDir(teamId: string): string {
+  return path.join(TEAMS_BASE_DIR, teamId, 'reports');
 }
 
-function reportPath(teamName: string, taskId: string, teammateName: string): string {
-  return path.join(reportsDir(teamName), `${teammateName}--${taskId}.md`);
+function reportPath(teamId: string, taskId: string, teammateName: string): string {
+  return path.join(reportsDir(teamId), `${teammateName}--${taskId}.md`);
 }
 
 server.tool(
@@ -856,9 +896,10 @@ server.tool(
   },
   async ({ task_id, teammate_name, title, body, team_name }) => {
     const tn = resolveTeam(team_name);
-    const dir = reportsDir(tn);
+    const tid = resolveTeamId(team_name);
+    const dir = reportsDir(tid);
     fs.mkdirSync(dir, { recursive: true });
-    const filePath = reportPath(tn, task_id, teammate_name);
+    const filePath = reportPath(tid, task_id, teammate_name);
     const content = [
       `# ${title}`,
       '',
@@ -873,7 +914,8 @@ server.tool(
     fs.writeFileSync(filePath, content, 'utf-8');
     // Also log an audit message
     const team = safeLoadTeam(tn);
-    await sendMessage(tn, teammate_name, 'lead',
+    const tid = team.teamId;
+    await sendMessage(tid, teammate_name, 'lead',
       `[REPORT SUBMITTED] Report for task "${task_id}": ${title}`);
     return text(`Report saved for task "${task_id}" by ${teammate_name}.`);
   }
@@ -889,7 +931,8 @@ server.tool(
   },
   async ({ task_id, teammate_name, team_name }) => {
     const tn = resolveTeam(team_name);
-    const filePath = reportPath(tn, task_id, teammate_name);
+    const tid = resolveTeamId(team_name);
+    const filePath = reportPath(tid, task_id, teammate_name);
     try {
       const content = fs.readFileSync(filePath, 'utf-8');
       return text(content);
@@ -908,7 +951,8 @@ server.tool(
   },
   async ({ team_name, teammate_name }) => {
     const tn = resolveTeam(team_name);
-    const dir = reportsDir(tn);
+    const tid = resolveTeamId(team_name);
+    const dir = reportsDir(tid);
     if (!fs.existsSync(dir)) return text('No reports submitted yet.');
     const files = fs.readdirSync(dir).filter(f => f.endsWith('.md'));
     if (files.length === 0) return text('No reports submitted yet.');
@@ -956,7 +1000,7 @@ async function monitorAndRespawn(
     await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
 
     // Check task completion
-    const tasks = readTaskList(teamName);
+    const tasks = readTaskList(team.teamId);
     const incomplete = tasks.filter(t => t.status !== 'completed');
     if (incomplete.length === 0) {
       return { completed: true, reason: 'All tasks completed.' };
@@ -974,7 +1018,7 @@ async function monitorAndRespawn(
       const key = `${teamName}:${member.name}`;
       const count = respawnCounts.get(key) ?? 0;
       if (count >= MAX_RESPAWNS) {
-        await sendMessage(teamName, 'system', 'lead',
+        await sendMessage(currentTeam.teamId, 'system', 'lead',
           `[RESPAWN LIMIT] ${member.name} has been respawned ${MAX_RESPAWNS} times. Skipping.`);
         continue;
       }
@@ -986,11 +1030,11 @@ async function monitorAndRespawn(
           spawnPrompt: `Complete these remaining tasks:\n${taskList}`,
         });
         respawnCounts.set(key, count + 1);
-        await sendMessage(teamName, 'system', 'lead',
+        await sendMessage(currentTeam.teamId, 'system', 'lead',
           `[AUTO-RESPAWN] ${member.name} respawned (attempt ${count + 1}/${MAX_RESPAWNS}). ` +
           `Remaining tasks: ${assignedTasks.map(t => t.id).join(', ')}`);
       } catch (err) {
-        await sendMessage(teamName, 'system', 'lead',
+        await sendMessage(currentTeam.teamId, 'system', 'lead',
           `[RESPAWN FAILED] Could not respawn ${member.name}: ${err}`);
       }
     }
@@ -1029,7 +1073,7 @@ server.tool(
     results.push(`✓ Team created: ${team.teamName}`);
 
     // 2. Batch create tasks
-    const created = await createTasksBatch(team.teamName, taskInputs.map(t => ({
+    const created = await createTasksBatch(team.teamId, taskInputs.map(t => ({
       id: t.id,
       title: t.title,
       description: t.title,
@@ -1040,7 +1084,7 @@ server.tool(
 
     // 3. Start sprint
     const allTaskIds = created.map(t => t.id);
-    const sprint = await startSprint(team.teamName, 1, allTaskIds);
+    const sprint = await startSprint(team.teamId, 1, allTaskIds);
 
     // 4. Spawn teammates and build assignments
     const assignments: Array<{ teammate: string; taskId: string; taskTitle: string; estimate: 'S' | 'M' | 'L' | 'XL' }> = [];
@@ -1051,7 +1095,7 @@ server.tool(
         spawnPrompt: tm.prompt,
       });
       // Log spawn
-      await sendMessage(team.teamName, session_id, tm.name,
+      await sendMessage(team.teamId, session_id, tm.name,
         `[SPAWNED] Role: ${tm.agent_type ?? 'coder'}. Instructions: ${tm.prompt}`);
 
       for (const taskId of tm.task_ids) {
@@ -1063,14 +1107,14 @@ server.tool(
             taskTitle: task.title,
             estimate: (task.complexity ?? 'M') as 'S' | 'M' | 'L' | 'XL',
           });
-          await assignTask(team.teamName, task.id, tm.name);
+          await assignTask(team.teamId, task.id, tm.name);
         }
       }
       results.push(`✓ Spawned ${tm.name} with ${tm.task_ids.length} tasks`);
     }
 
     // 5. Activate sprint
-    await activateSprint(team.teamName, 1, assignments);
+    await activateSprint(team.teamId, 1, assignments);
     results.push(`✓ Sprint 1 activated`);
 
     // 6. Monitor progress with auto-respawn
@@ -1079,7 +1123,7 @@ server.tool(
     results.push(monitor.completed ? `✓ ${monitor.reason}` : `⚠ ${monitor.reason}`);
 
     // 7. Collect reports
-    const dir = reportsDir(team.teamName);
+    const dir = reportsDir(team.teamId);
     let reportSummary = 'No reports submitted.';
     if (fs.existsSync(dir)) {
       const files = fs.readdirSync(dir).filter(f => f.endsWith('.md'));
@@ -1095,7 +1139,7 @@ server.tool(
 
     // 8. Close sprint
     try {
-      await closeSprint(team.teamName, 1);
+      await closeSprint(team.teamId, 1);
       results.push(`✓ Sprint 1 closed`);
     } catch { /* may already be closed */ }
 
@@ -1125,7 +1169,8 @@ server.tool(
   async ({ task_ids, team_name }) => {
     if (isTeammate()) return text('Error: This operation is restricted to the Team Lead.');
     const tn = resolveTeam(team_name);
-    startPlanningPoker(tn, task_ids);
+    const tid = resolveTeamId(team_name);
+    startPlanningPoker(tid, task_ids);
     return text(`Planning poker started for tasks: ${task_ids.join(', ')}`);
   }
 );
@@ -1141,7 +1186,8 @@ server.tool(
   },
   async ({ task_id, teammate_name, estimate, team_name }) => {
     const tn = resolveTeam(team_name);
-    submitEstimate(tn, task_id, teammate_name, estimate);
+    const tid = resolveTeamId(team_name);
+    submitEstimate(tid, task_id, teammate_name, estimate);
     return text(`Estimate submitted: ${estimate} for task ${task_id}`);
   }
 );
@@ -1156,7 +1202,8 @@ server.tool(
   async ({ task_id, team_name }) => {
     if (isTeammate()) return text('Error: This operation is restricted to the Team Lead.');
     const tn = resolveTeam(team_name);
-    const resolved = await resolveEstimates(tn, task_id);
+    const tid = resolveTeamId(team_name);
+    const resolved = await resolveEstimates(tid, task_id);
     return text(`Estimates resolved for ${task_id}: ${resolved}`);
   }
 );
@@ -1170,7 +1217,8 @@ server.tool(
   async ({ team_name }) => {
     if (isTeammate()) return text('Error: This operation is restricted to the Team Lead.');
     const tn = resolveTeam(team_name);
-    const tasks = readTaskList(tn).filter(t => t.status === 'pending' && t.complexity);
+    const tid = resolveTeamId(team_name);
+    const tasks = readTaskList(tid).filter(t => t.status === 'pending' && t.complexity);
     const statuses = getTeammateStatuses(tn);
     const activeTeammates = statuses.filter(s => s.status === 'active').map(s => s.name);
     if (activeTeammates.length === 0) return text('No active teammates to assign to.');
@@ -1195,7 +1243,8 @@ server.tool(
   },
   async ({ teammate_name, operation, description, target_resource, team_name }) => {
     const tn = resolveTeam(team_name);
-    const response = await requestPermission(tn, teammate_name, operation, description, target_resource);
+    const tid = resolveTeamId(team_name);
+    const response = await requestPermission(tid, teammate_name, operation, description, target_resource);
     return json(response);
   }
 );
@@ -1212,7 +1261,8 @@ server.tool(
   async ({ request_id, decision, rationale, team_name }) => {
     if (isTeammate()) return text('Error: This operation is restricted to the Team Lead.');
     const tn = resolveTeam(team_name);
-    const response = await reviewPermission(tn, request_id, decision, rationale);
+    const tid = resolveTeamId(team_name);
+    const response = await reviewPermission(tid, request_id, decision, rationale);
     return json(response);
   }
 );
@@ -1226,7 +1276,8 @@ server.tool(
   async ({ team_name }) => {
     if (isTeammate()) return text('Error: This operation is restricted to the Team Lead.');
     const tn = resolveTeam(team_name);
-    const entries = readAuditLog(tn);
+    const tid = resolveTeamId(team_name);
+    const entries = readAuditLog(tid);
     if (entries.length === 0) return text('No audit log entries.');
     return json(entries);
   }
@@ -1241,7 +1292,8 @@ server.tool(
   async ({ team_name }) => {
     if (isTeammate()) return text('Error: This operation is restricted to the Team Lead.');
     const tn = resolveTeam(team_name);
-    const pending = loadPendingRequests(tn);
+    const tid = resolveTeamId(team_name);
+    const pending = loadPendingRequests(tid);
     if (pending.length === 0) return text('No pending permission requests.');
     return json(pending);
   }
@@ -1259,7 +1311,8 @@ server.tool(
   },
   async ({ team_name }) => {
     const tn = resolveTeam(team_name);
-    const hooks = await loadHooks(tn);
+    const tid = resolveTeamId(team_name);
+    const hooks = await loadHooks(tid);
     if (hooks.length === 0) return text('No hooks configured.');
     return json(hooks);
   }
@@ -1279,7 +1332,8 @@ server.tool(
   async ({ hooks, team_name }) => {
     if (isTeammate()) return text('Error: This operation is restricted to the Team Lead.');
     const tn = resolveTeam(team_name);
-    await saveHooks(tn, hooks);
+    const tid = resolveTeamId(team_name);
+    await saveHooks(tid, hooks);
     return text(`${hooks.length} hooks saved.`);
   }
 );

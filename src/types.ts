@@ -16,6 +16,7 @@ export interface TeamMember {
 }
 
 export interface TeamConfig {
+  teamId: string;
   teamName: string;
   leadSessionId: string;
   createdAt: string;

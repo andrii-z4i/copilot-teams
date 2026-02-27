@@ -59,15 +59,17 @@ describe('createTeam', () => {
     const config = await createTeam({ leadSessionId: 'lead-1' });
 
     expect(config.teamName).toMatch(/^[a-z]+-[a-z]+-[0-9a-f]{4}$/);
+    expect(config.teamId).toBeTruthy();
     expect(config.leadSessionId).toBe('lead-1');
     expect(config.createdAt).toBeTruthy();
     expect(config.members).toEqual([]);
 
-    // Verify file on disk
-    const filePath = path.join(tmpBase, config.teamName, 'config.json');
+    // Verify file on disk — directory is named by teamId (UUID), not teamName
+    const filePath = path.join(tmpBase, config.teamId, 'config.json');
     expect(fs.existsSync(filePath)).toBe(true);
     const persisted = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
     expect(persisted.teamName).toBe(config.teamName);
+    expect(persisted.teamId).toBe(config.teamId);
   });
 
   it('accepts a custom team name', async () => {
@@ -304,11 +306,11 @@ describe('cleanupTeam', () => {
     expect(() => loadTeam('cleanup-fail')).not.toThrow();
   });
 
-  it('removes entire team directory including all files (TL-8)', async () => {
-    await createTeam({ leadSessionId: 'lead-1', teamName: 'cleanup-full' });
+  it('preserves artifact files and removes only config on cleanup (TL-8)', async () => {
+    const team = await createTeam({ leadSessionId: 'lead-1', teamName: 'cleanup-full' });
 
-    // Create additional team files to verify they're all removed
-    const teamDir = path.join(tmpBase, 'cleanup-full');
+    // Create additional team files (artifacts)
+    const teamDir = path.join(tmpBase, team.teamId);
     fs.writeFileSync(path.join(teamDir, 'backlog.md'), '# Backlog');
     fs.writeFileSync(path.join(teamDir, 'messages.md'), '# Messages');
     fs.writeFileSync(path.join(teamDir, 'sprint.md'), '# Sprint');
@@ -317,7 +319,14 @@ describe('cleanupTeam', () => {
 
     const result = await cleanupTeam('cleanup-full', 'lead-1');
     expect(result.success).toBe(true);
-    expect(fs.existsSync(teamDir)).toBe(false);
+
+    // Config removed — team is no longer discoverable
+    expect(fs.existsSync(path.join(teamDir, 'config.json'))).toBe(false);
+    // Artifact files preserved for audit
+    expect(fs.existsSync(path.join(teamDir, 'backlog.md'))).toBe(true);
+    expect(fs.existsSync(path.join(teamDir, 'messages.md'))).toBe(true);
+    // Directory itself still exists
+    expect(fs.existsSync(teamDir)).toBe(true);
   });
 
   it('non-lead cannot clean up team', async () => {
