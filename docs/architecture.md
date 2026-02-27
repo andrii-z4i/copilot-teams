@@ -46,6 +46,9 @@ Copilot Teams follows a **hub-and-spoke** architecture with a single Team Lead o
         │  sprint.md              │
         │  messages.md            │
         │  files.md               │
+        │  plans.json             │
+        │  hooks.json             │
+        │  reports/               │
         │  permission-audit.log   │
         └─────────────────────────┘
 ```
@@ -58,6 +61,9 @@ Copilot Teams follows a **hub-and-spoke** architecture with a single Team Lead o
 
 ```
 src/
+  cli.ts         # CLI entry point (copilot-teams command)
+  mcp-server.ts  # MCP server entry point (copilot-teams-mcp, 46 tools)
+  commands/       # CLI command handlers (team, teammate, task, sprint, msg, status, plan, hook, file, display)
   config/        # Feature flag, settings loading, CLI flag parsing
   team/          # Team lifecycle (create, cleanup, config persistence)
   teammate/      # Process spawning, shutdown, status tracking
@@ -68,7 +74,7 @@ src/
   hooks/         # Quality gates (TeammateIdle, TaskCompleted)
   plan/          # Plan-then-implement approval workflow
   sprint/        # Sprint lifecycle, planning poker
-  utils/         # File locking, atomic writes, path resolution
+  utils/         # File locking, atomic writes, path resolution, file claims, resilience (crash detection), cost tracking
   types.ts       # Shared interfaces (TeamConfig, Task, Message, etc.)
   constants.ts   # Well-known paths, states, complexity weights
 ```
@@ -183,6 +189,24 @@ Append-only. Lead denies claims if another teammate holds an active `in-use` lea
 
 Append-only JSONL. Only Lead writes; user and Lead can read.
 
+### 3.7 Reports (`reports/`)
+
+Each teammate can submit a report per task. Reports are stored as individual Markdown files:
+
+```
+reports/{teammate}-{task-id}.md
+```
+
+The Lead writes reports on behalf of teammates. Reports can be retrieved individually or as a consolidated view across all teammates.
+
+### 3.8 Plans (`plans.json`)
+
+Plan approval state is stored as a JSON file tracking plan submissions, revisions, and approval decisions for each teammate-task pair.
+
+### 3.9 Hooks (`hooks.json`)
+
+Hook configuration for lifecycle events (TeammateIdle, TaskCompleted). Each hook entry specifies an event, a shell command, and an optional working directory.
+
 ---
 
 ## 4. Coordination Protocol
@@ -198,6 +222,9 @@ The Lead is the **sole writer** to all shared coordination files. This eliminate
 | `sprint.md` | Read/Write (append) | Read |
 | `messages.md` | Read/Write (append) | Read |
 | `files.md` | Read/Write (append) | Read |
+| `plans.json` | Read/Write | Read |
+| `hooks.json` | Read/Write | Read |
+| `reports/` | Read/Write | Read (submit via Lead) |
 | `permission-audit.log` | Read/Write (append) | No access |
 
 Teammates submit **requests** via IPC to the Lead. The Lead validates, acquires a file lock, performs the mutation, and releases the lock. This is the fundamental coordination pattern for every operation.
@@ -465,22 +492,50 @@ This layered prompt template means:
 
 ---
 
-## 10. Technology Stack
+## 10. MCP Server Interface
+
+The system is exposed to GitHub Copilot CLI via an MCP (Model Context Protocol) server (`copilot-teams-mcp`). The MCP server wraps all coordination operations as **46 callable tools**, enabling natural-language-driven orchestration.
+
+Tool categories:
+
+| Category | Tools | Count |
+|----------|-------|-------|
+| Team Lifecycle | `create_team`, `list_teams`, `show_team`, `cleanup_team` | 4 |
+| Teammate Management | `spawn_teammate`, `list_teammates`, `shutdown_teammate`, `force_stop_teammate` | 4 |
+| Task Management | `add_task`, `add_tasks`, `list_tasks`, `update_task`, `assign_task`, `delete_task` | 6 |
+| Sprint Management | `start_sprint`, `activate_sprint`, `close_sprint`, `show_sprint`, `list_sprints` | 5 |
+| Communication | `send_message`, `broadcast_message`, `read_messages` | 3 |
+| Status | `team_status` | 1 |
+| Plan Approval | `enter_plan_mode`, `submit_plan`, `list_pending_plans`, `review_plan`, `set_approval_criteria` | 5 |
+| File Claims | `claim_file`, `release_file`, `list_file_claims`, `detect_file_conflicts` | 4 |
+| Reports | `submit_report`, `get_report`, `get_all_reports` | 3 |
+| Auto-Orchestration | `run_team` | 1 |
+| Planning Poker | `start_planning_poker`, `submit_estimate`, `resolve_estimates`, `balance_assignments` | 4 |
+| Permissions | `request_permission`, `review_permission`, `read_audit_log`, `list_pending_permissions` | 4 |
+| Hooks | `list_hooks`, `save_hooks` | 2 |
+
+The `run_team` tool is a high-level orchestration tool that automates the full lifecycle: task creation, teammate spawning, sprint execution, crash recovery (with auto-respawn), and report collection.
+
+---
+
+## 11. Technology Stack
 
 | Layer | Choice | Rationale |
 |-------|--------|-----------|
 | Runtime | Node.js | Aligns with Copilot CLI ecosystem |
 | Language | TypeScript | Type safety for complex coordination logic |
+| MCP SDK | `@modelcontextprotocol/sdk` | Standard MCP server implementation |
+| Schema validation | `zod` | Runtime input validation for MCP tool parameters |
 | Process management | `child_process` | Native Node.js, no external deps |
 | File locking | `proper-lockfile` | Battle-tested advisory locks |
 | File watching | `fs.watch` / `chokidar` | Push-based message delivery |
 | Terminal UI | Raw `process.stdin` | No external deps for in-process mode |
 | Split panes | `tmux` CLI / `it2` CLI | Native terminal multiplexer integration |
-| Testing | Vitest or Jest | Standard TS test runners |
+| Testing | Vitest | Fast TypeScript-native test runner |
 
 ---
 
-## 11. Security Considerations
+## 12. Security Considerations
 
 1. **No secrets in shared files** — coordination files contain task metadata, not credentials
 2. **Least-privilege by default** — teammates start with zero permissions
@@ -491,7 +546,7 @@ This layered prompt template means:
 
 ---
 
-## 12. Known Limitations (v1)
+## 13. Known Limitations (v1)
 
 | Limitation | Impact | Mitigation |
 |-----------|--------|------------|
@@ -516,4 +571,5 @@ This layered prompt template means:
 | §7 Sprint & Planning Poker | TS-5–TS-19, §3.3.5 |
 | §8 Display Architecture | DM-1–DM-12, CM-8–CM-10 |
 | §9 Code vs. Prompt | TM-5, PA-6, §8 Best Practices |
-| §10 Technology Stack | CF-1–CF-4 |
+| §10 MCP Server Interface | All functional requirements (MCP is the primary integration surface) |
+| §11 Technology Stack | CF-1–CF-4 |
