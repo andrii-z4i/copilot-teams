@@ -236,6 +236,17 @@ export async function createTeam(options: CreateTeamOptions): Promise<TeamConfig
 
   await withLock(lockPath, () => {
     saveTeam(config);
+    // Initialize audit and tracking files so they are always present in the team directory,
+    // even if the corresponding features have not been used yet.
+    if (!fs.existsSync(resolveTeamFile(teamId, 'permission-audit'))) {
+      atomicWriteFile(resolveTeamFile(teamId, 'permission-audit'), '');
+    }
+    if (!fs.existsSync(resolveTeamFile(teamId, 'files'))) {
+      atomicWriteFile(resolveTeamFile(teamId, 'files'), '');
+    }
+    if (!fs.existsSync(resolveTeamFile(teamId, 'hooks'))) {
+      atomicWriteFile(resolveTeamFile(teamId, 'hooks'), '[]');
+    }
   });
 
   return config;

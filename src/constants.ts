@@ -23,6 +23,7 @@ export const BACKLOG_FILE = 'backlog.md';
 export const MESSAGES_FILE = 'messages.md';
 export const SPRINT_FILE = 'sprint.md';
 export const FILES_FILE = 'files.md';
+export const HOOKS_FILE = 'hooks.json';
 export const PERMISSION_AUDIT_FILE = 'permission-audit.log';
 
 // ── Task states ──

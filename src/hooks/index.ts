@@ -11,6 +11,7 @@
 
 import type { HookConfig, HookEvent } from '../types.js';
 import { resolvePath, atomicWriteFile } from '../utils/index.js';
+import { HOOKS_FILE } from '../constants.js';
 import fs from 'node:fs/promises';
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 
@@ -35,7 +36,6 @@ export interface HookResult {
 
 // ── Constants ──
 
-const HOOKS_FILE = 'hooks.json';
 const VETO_EXIT_CODE = 2;
 
 // ── Command runner abstraction (for testability) ──

@@ -67,6 +67,7 @@ describe('path resolution', () => {
       'messages',
       'sprint',
       'files',
+      'hooks',
       'permission-audit',
     ]);
     expect(all.config).toContain('config.json');
