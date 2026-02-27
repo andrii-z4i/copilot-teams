@@ -72,8 +72,8 @@ function parseSprintSection(section: string): Sprint | null {
 /**
  * Read all sprints from the sprint file.
  */
-export function readSprints(teamName: string): Sprint[] {
-  const sprintPath = resolveTeamFile(teamName, 'sprint');
+export function readSprints(teamId: string): Sprint[] {
+  const sprintPath = resolveTeamFile(teamId, 'sprint');
   if (!fs.existsSync(sprintPath)) return [];
   const content = fs.readFileSync(sprintPath, 'utf-8');
   return parseSprintSections(content);
@@ -82,8 +82,8 @@ export function readSprints(teamName: string): Sprint[] {
 /**
  * Get the current (latest non-closed) sprint, or null.
  */
-export function getCurrentSprint(teamName: string): Sprint | null {
-  const sprints = readSprints(teamName);
+export function getCurrentSprint(teamId: string): Sprint | null {
+  const sprints = readSprints(teamId);
   // Return the latest sprint that is not closed
   for (let i = sprints.length - 1; i >= 0; i--) {
     if (sprints[i].status !== 'closed') return sprints[i];
@@ -94,8 +94,8 @@ export function getCurrentSprint(teamName: string): Sprint | null {
 /**
  * Get a specific sprint by number.
  */
-export function getSprint(teamName: string, sprintNumber: number): Sprint | null {
-  const sprints = readSprints(teamName);
+export function getSprint(teamId: string, sprintNumber: number): Sprint | null {
+  const sprints = readSprints(teamId);
   return sprints.find((s) => s.number === sprintNumber) ?? null;
 }
 
@@ -103,14 +103,14 @@ export function getSprint(teamName: string, sprintNumber: number): Sprint | null
  * Start a new sprint in planning status.
  */
 export async function startSprint(
-  teamName: string,
+  teamId: string,
   sprintNumber: number,
   taskIds: string[],
 ): Promise<Sprint> {
-  const sprintPath = resolveTeamFile(teamName, 'sprint');
+  const sprintPath = resolveTeamFile(teamId, 'sprint');
 
   return withLock(sprintPath, () => {
-    const existing = readSprints(teamName);
+    const existing = readSprints(teamId);
 
     // Validate no active sprint
     const active = existing.find((s) => s.status !== 'closed');
@@ -129,7 +129,7 @@ export async function startSprint(
     }
 
     // Read tasks to validate they exist
-    const tasks = readTaskList(teamName);
+    const tasks = readTaskList(teamId);
     for (const taskId of taskIds) {
       if (!tasks.find((t) => t.id === taskId)) {
         throw new Error(`Task "${taskId}" not found in backlog.`);
@@ -157,14 +157,14 @@ export async function startSprint(
  * Assignments must be set before activation.
  */
 export async function activateSprint(
-  teamName: string,
+  teamId: string,
   sprintNumber: number,
   assignments: SprintAssignment[],
 ): Promise<Sprint> {
-  const sprintPath = resolveTeamFile(teamName, 'sprint');
+  const sprintPath = resolveTeamFile(teamId, 'sprint');
 
   return withLock(sprintPath, () => {
-    const sprints = readSprints(teamName);
+    const sprints = readSprints(teamId);
     const sprint = sprints.find((s) => s.number === sprintNumber);
 
     if (!sprint) {
@@ -197,7 +197,7 @@ export async function activateSprint(
     sprint.assignments = assignments;
 
     // Rewrite the entire file (we overwrite the last section)
-    rewriteSprints(teamName, sprints);
+    rewriteSprints(teamId, sprints);
 
     return sprint;
   });
@@ -208,13 +208,13 @@ export async function activateSprint(
  * Unfinished tasks are returned to the backlog.
  */
 export async function closeSprint(
-  teamName: string,
+  teamId: string,
   sprintNumber: number,
 ): Promise<{ sprint: Sprint; unfinishedTaskIds: string[] }> {
-  const sprintPath = resolveTeamFile(teamName, 'sprint');
+  const sprintPath = resolveTeamFile(teamId, 'sprint');
 
   return withLock(sprintPath, () => {
-    const sprints = readSprints(teamName);
+    const sprints = readSprints(teamId);
     const sprint = sprints.find((s) => s.number === sprintNumber);
 
     if (!sprint) {
@@ -227,7 +227,7 @@ export async function closeSprint(
     }
 
     // Find unfinished tasks
-    const tasks = readTaskList(teamName);
+    const tasks = readTaskList(teamId);
     const sprintTaskIds = sprint.assignments.map((a) => a.taskId);
     const unfinishedTaskIds = sprintTaskIds.filter((id) => {
       const task = tasks.find((t) => t.id === id);
@@ -237,7 +237,7 @@ export async function closeSprint(
     sprint.status = 'closed';
     sprint.closedAt = new Date().toISOString();
 
-    rewriteSprints(teamName, sprints);
+    rewriteSprints(teamId, sprints);
 
     return { sprint, unfinishedTaskIds };
   });
@@ -247,10 +247,10 @@ export async function closeSprint(
  * Get task IDs assigned in the current sprint for a specific teammate.
  */
 export function getTeammateSprintTaskIds(
-  teamName: string,
+  teamId: string,
   teammateName: string,
 ): string[] {
-  const sprint = getCurrentSprint(teamName);
+  const sprint = getCurrentSprint(teamId);
   if (!sprint) return [];
   return sprint.assignments
     .filter((a) => a.teammate === teammateName)
@@ -263,8 +263,8 @@ export function getTeammateSprintTaskIds(
  * Rewrite all sprints to the sprint file.
  * Used when updating a sprint section (only Lead may do this).
  */
-function rewriteSprints(teamName: string, sprints: Sprint[]): void {
-  const sprintPath = resolveTeamFile(teamName, 'sprint');
+function rewriteSprints(teamId: string, sprints: Sprint[]): void {
+  const sprintPath = resolveTeamFile(teamId, 'sprint');
   ensureDir(path.dirname(sprintPath));
   const content = sprints.map((s) => serializeSprint(s) + '---\n\n').join('');
   atomicWriteFile(sprintPath, content);

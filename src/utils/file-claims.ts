@@ -38,8 +38,8 @@ function parseClaim(line: string): FileClaim | null {
 
 // ── Internal helpers ──
 
-async function readClaims(teamName: string): Promise<FileClaim[]> {
-  const filePath = resolvePath(teamName, FILES_FILE);
+async function readClaims(teamId: string): Promise<FileClaim[]> {
+  const filePath = resolvePath(teamId, FILES_FILE);
   try {
     const raw = await fs.readFile(filePath, 'utf-8');
     return raw
@@ -82,14 +82,14 @@ function getActiveLeases(claims: FileClaim[]): Map<string, FileClaim> {
  * Returns the claim if approved, throws if denied (NF-6).
  */
 export async function claimFile(
-  teamName: string,
+  teamId: string,
   teammateId: string,
   taskId: string,
   filePath: string
 ): Promise<FileClaim> {
-  const lockPath = resolvePath(teamName, FILES_FILE);
+  const lockPath = resolvePath(teamId, FILES_FILE);
   return withLock(lockPath, async () => {
-    const claims = await readClaims(teamName);
+    const claims = await readClaims(teamId);
     const active = getActiveLeases(claims);
 
     const existing = active.get(filePath);
@@ -108,7 +108,7 @@ export async function claimFile(
       status: 'in-use',
     };
 
-    const fp = resolvePath(teamName, FILES_FILE);
+    const fp = resolvePath(teamId, FILES_FILE);
     await ensureDir(path.dirname(fp));
     await appendFile(fp, serializeClaim(claim) + '\n');
     return claim;
@@ -119,12 +119,12 @@ export async function claimFile(
  * Release a file claim by appending a "free" entry.
  */
 export async function releaseFile(
-  teamName: string,
+  teamId: string,
   teammateId: string,
   taskId: string,
   filePath: string
 ): Promise<FileClaim> {
-  const lockPath = resolvePath(teamName, FILES_FILE);
+  const lockPath = resolvePath(teamId, FILES_FILE);
   return withLock(lockPath, async () => {
     const claim: FileClaim = {
       timestamp: new Date().toISOString(),
@@ -134,7 +134,7 @@ export async function releaseFile(
       status: 'free',
     };
 
-    const fp = resolvePath(teamName, FILES_FILE);
+    const fp = resolvePath(teamId, FILES_FILE);
     await ensureDir(path.dirname(fp));
     await appendFile(fp, serializeClaim(claim) + '\n');
     return claim;
@@ -145,9 +145,9 @@ export async function releaseFile(
  * Get all currently active file leases.
  */
 export async function getActiveFileClaims(
-  teamName: string
+  teamId: string
 ): Promise<FileClaim[]> {
-  const claims = await readClaims(teamName);
+  const claims = await readClaims(teamId);
   const active = getActiveLeases(claims);
   return [...active.values()];
 }
@@ -157,9 +157,9 @@ export async function getActiveFileClaims(
  * Returns list of conflicting file paths with the involved teammates.
  */
 export async function detectFileConflicts(
-  teamName: string
+  teamId: string
 ): Promise<Array<{ filePath: string; claimedBy: string[] }>> {
-  const claims = await readClaims(teamName);
+  const claims = await readClaims(teamId);
 
   // Group all in-use claims by file path
   const byFile = new Map<string, Set<string>>();
@@ -198,12 +198,12 @@ export async function detectFileConflicts(
  * Called when a teammate crashes to free their claimed files.
  */
 export async function releaseAllTeammateClaims(
-  teamName: string,
+  teamId: string,
   teammateId: string
 ): Promise<FileClaim[]> {
-  const lockPath = resolvePath(teamName, FILES_FILE);
+  const lockPath = resolvePath(teamId, FILES_FILE);
   return withLock(lockPath, async () => {
-    const claims = await readClaims(teamName);
+    const claims = await readClaims(teamId);
     const active = getActiveLeases(claims);
     const released: FileClaim[] = [];
 
@@ -216,7 +216,7 @@ export async function releaseAllTeammateClaims(
           filePath: fp,
           status: 'free',
         };
-        const filePath = resolvePath(teamName, FILES_FILE);
+        const filePath = resolvePath(teamId, FILES_FILE);
         await ensureDir(path.dirname(filePath));
         await appendFile(filePath, serializeClaim(freeClaim) + '\n');
         released.push(freeClaim);
@@ -230,10 +230,10 @@ export async function releaseAllTeammateClaims(
  * Get files currently claimed by a specific teammate.
  */
 export async function getTeammateFiles(
-  teamName: string,
+  teamId: string,
   teammateId: string
 ): Promise<string[]> {
-  const claims = await readClaims(teamName);
+  const claims = await readClaims(teamId);
   const active = getActiveLeases(claims);
   const files: string[] = [];
   for (const [fp, claim] of active) {
@@ -266,6 +266,6 @@ export function suggestFilePartitioning(
 /**
  * Read all raw claims from files.md (for inspection/testing).
  */
-export async function readAllClaims(teamName: string): Promise<FileClaim[]> {
-  return readClaims(teamName);
+export async function readAllClaims(teamId: string): Promise<FileClaim[]> {
+  return readClaims(teamId);
 }

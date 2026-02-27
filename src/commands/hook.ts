@@ -3,6 +3,7 @@
  */
 
 import { parseFlags, resolveTeamName } from './helpers.js';
+import { loadTeam } from '../team/index.js';
 import { loadHooks, saveHooks } from '../hooks/index.js';
 import type { HookEvent } from '../types.js';
 
@@ -33,11 +34,13 @@ export async function cmdHook(args: string[]): Promise<void> {
   }
 
   const teamName = resolveTeamName(flags);
+  const team = loadTeam(teamName);
+  const tid = team.teamId;
 
   switch (sub) {
     case 'list':
     case 'ls': {
-      const hooks = await loadHooks(teamName);
+      const hooks = await loadHooks(tid);
       if (hooks.length === 0) { console.log('No hooks configured.'); return; }
       for (const h of hooks) {
         console.log(`  [${h.event}] ${h.command}${h.workingDir ? ` (cwd: ${h.workingDir})` : ''}`);
@@ -51,14 +54,14 @@ export async function cmdHook(args: string[]): Promise<void> {
         console.error('Usage: copilot-teams hook add --event TaskCompleted --command "npm test"');
         process.exit(1);
       }
-      const hooks = await loadHooks(teamName);
+      const hooks = await loadHooks(tid);
       hooks.push({ event, command, workingDir: flags['cwd'] });
-      await saveHooks(teamName, hooks);
+      await saveHooks(tid, hooks);
       console.log(`✓ Hook added: [${event}] ${command}`);
       break;
     }
     case 'clear': {
-      await saveHooks(teamName, []);
+      await saveHooks(tid, []);
       console.log('✓ All hooks cleared.');
       break;
     }

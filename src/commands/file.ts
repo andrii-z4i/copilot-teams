@@ -3,6 +3,7 @@
  */
 
 import { parseFlags, resolveTeamName } from './helpers.js';
+import { loadTeam } from '../team/index.js';
 import {
   claimFile,
   releaseFile,
@@ -39,6 +40,8 @@ export async function cmdFile(args: string[]): Promise<void> {
   }
 
   const teamName = resolveTeamName(flags);
+  const team = loadTeam(teamName);
+  const tid = team.teamId;
 
   switch (sub) {
     case 'claim': {
@@ -47,7 +50,7 @@ export async function cmdFile(args: string[]): Promise<void> {
         console.error('Usage: copilot-teams file claim <teammate> <task-id> <path>');
         process.exit(1);
       }
-      const claim = await claimFile(teamName, teammate, taskId, filePath);
+      const claim = await claimFile(tid, teammate, taskId, filePath);
       console.log(`✓ ${teammate} claimed ${filePath} (task ${taskId}).`);
       break;
     }
@@ -57,13 +60,13 @@ export async function cmdFile(args: string[]): Promise<void> {
         console.error('Usage: copilot-teams file release <teammate> <task-id> <path>');
         process.exit(1);
       }
-      await releaseFile(teamName, teammate, taskId, filePath);
+      await releaseFile(tid, teammate, taskId, filePath);
       console.log(`✓ ${teammate} released ${filePath}.`);
       break;
     }
     case 'list':
     case 'ls': {
-      const claims = await getActiveFileClaims(teamName);
+      const claims = await getActiveFileClaims(tid);
       if (claims.length === 0) { console.log('No active file claims.'); return; }
       for (const c of claims) {
         console.log(`  ${c.teammateId} → ${c.filePath} (task ${c.taskId})`);
@@ -71,7 +74,7 @@ export async function cmdFile(args: string[]): Promise<void> {
       break;
     }
     case 'conflicts': {
-      const conflicts = await detectFileConflicts(teamName);
+      const conflicts = await detectFileConflicts(tid);
       if (conflicts.length === 0) { console.log('No file conflicts detected.'); return; }
       for (const c of conflicts) {
         console.log(`  ⚠ ${c.filePath}: claimed by ${c.claimedBy.join(', ')}`);

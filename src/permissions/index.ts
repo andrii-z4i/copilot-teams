@@ -54,7 +54,7 @@ function generateRequestId(): string {
  * Returns the Lead's decision.
  */
 export function requestPermission(
-  teamName: string,
+  teamId: string,
   teammateName: string,
   operation: string,
   description: string,
@@ -74,17 +74,17 @@ export function requestPermission(
     pendingRequests.set(request.id, resolve);
 
     // Store request in pending file for the Lead to discover
-    const pendingPath = resolveTeamFile(teamName, 'messages');
+    const pendingPath = resolveTeamFile(teamId, 'messages');
     ensureDir(path.dirname(pendingPath));
     const pendingRequestsPath = path.join(
-      path.dirname(resolveTeamFile(teamName, 'config')),
+      path.dirname(resolveTeamFile(teamId, 'config')),
       'pending-permissions.json',
     );
     ensureDir(path.dirname(pendingRequestsPath));
 
     // Append to pending permissions file (with lock)
     withLockSync(pendingRequestsPath, () => {
-      const existing = loadPendingRequests(teamName);
+      const existing = loadPendingRequests(teamId);
       existing.push(request);
       fs.writeFileSync(pendingRequestsPath, JSON.stringify(existing, null, 2), 'utf-8');
     });
@@ -94,9 +94,9 @@ export function requestPermission(
 /**
  * Load pending permission requests for a team.
  */
-export function loadPendingRequests(teamName: string): PermissionRequest[] {
+export function loadPendingRequests(teamId: string): PermissionRequest[] {
   const pendingPath = path.join(
-    path.dirname(resolveTeamFile(teamName, 'config')),
+    path.dirname(resolveTeamFile(teamId, 'config')),
     'pending-permissions.json',
   );
   if (!fs.existsSync(pendingPath)) return [];
@@ -110,13 +110,13 @@ export function loadPendingRequests(teamName: string): PermissionRequest[] {
 /**
  * Remove a request from the pending list.
  */
-async function removePendingRequest(teamName: string, requestId: string): Promise<void> {
+async function removePendingRequest(teamId: string, requestId: string): Promise<void> {
   const pendingPath = path.join(
-    path.dirname(resolveTeamFile(teamName, 'config')),
+    path.dirname(resolveTeamFile(teamId, 'config')),
     'pending-permissions.json',
   );
   await withLock(pendingPath, () => {
-    const existing = loadPendingRequests(teamName);
+    const existing = loadPendingRequests(teamId);
     const filtered = existing.filter((r) => r.id !== requestId);
     fs.writeFileSync(pendingPath, JSON.stringify(filtered, null, 2), 'utf-8');
   });
@@ -130,14 +130,14 @@ async function removePendingRequest(teamName: string, requestId: string): Promis
  * Resolves the teammate's blocking promise.
  */
 export async function reviewPermission(
-  teamName: string,
+  teamId: string,
   requestId: string,
   decision: 'approved' | 'denied',
   rationale?: string,
   leadPermissions?: Set<string>,
 ): Promise<PermissionResponse> {
   // Find the pending request to get details for audit
-  const pending = loadPendingRequests(teamName);
+  const pending = loadPendingRequests(teamId);
   const request = pending.find((r) => r.id === requestId);
   if (!request) {
     throw new Error(`Permission request "${requestId}" not found.`);
@@ -153,7 +153,7 @@ export async function reviewPermission(
   const response: PermissionResponse = { requestId, decision, rationale };
 
   // TM-13: Log to audit trail
-  await logAuditEntry(teamName, {
+  await logAuditEntry(teamId, {
     timestamp: new Date().toISOString(),
     teammate: request.teammateName,
     operation: request.operation,
@@ -163,7 +163,7 @@ export async function reviewPermission(
   });
 
   // Remove from pending
-  await removePendingRequest(teamName, requestId);
+  await removePendingRequest(teamId, requestId);
 
   // Resolve the teammate's blocking promise (TM-16)
   const resolver = pendingRequests.get(requestId);
@@ -182,10 +182,10 @@ export async function reviewPermission(
  * Format: one JSON line per entry (JSONL). Append-only (TM-15).
  */
 async function logAuditEntry(
-  teamName: string,
+  teamId: string,
   entry: PermissionAuditEntry,
 ): Promise<void> {
-  const auditPath = resolveTeamFile(teamName, 'permission-audit');
+  const auditPath = resolveTeamFile(teamId, 'permission-audit');
 
   await withLock(auditPath, () => {
     appendFile(auditPath, JSON.stringify(entry) + '\n');
@@ -195,8 +195,8 @@ async function logAuditEntry(
 /**
  * Read the full audit log (TM-17). Available to Lead and user only.
  */
-export function readAuditLog(teamName: string): PermissionAuditEntry[] {
-  const auditPath = resolveTeamFile(teamName, 'permission-audit');
+export function readAuditLog(teamId: string): PermissionAuditEntry[] {
+  const auditPath = resolveTeamFile(teamId, 'permission-audit');
   if (!fs.existsSync(auditPath)) return [];
 
   const content = fs.readFileSync(auditPath, 'utf-8');
@@ -221,7 +221,7 @@ export function readAuditLog(teamName: string): PermissionAuditEntry[] {
  * Returns true if approved, false if denied.
  */
 export async function checkPermission(
-  teamName: string,
+  teamId: string,
   teammateName: string,
   operation: string,
   description: string,
@@ -242,7 +242,7 @@ export async function checkPermission(
     const { decision, rationale } = autoReview(request);
     const response: PermissionResponse = { requestId: request.id, decision, rationale };
 
-    await logAuditEntry(teamName, {
+    await logAuditEntry(teamId, {
       timestamp: new Date().toISOString(),
       teammate: teammateName,
       operation,
@@ -256,12 +256,12 @@ export async function checkPermission(
 
   // Store pending request for manual review (with lock)
   const pendingPath = path.join(
-    path.dirname(resolveTeamFile(teamName, 'config')),
+    path.dirname(resolveTeamFile(teamId, 'config')),
     'pending-permissions.json',
   );
   ensureDir(path.dirname(pendingPath));
   await withLock(pendingPath, () => {
-    const existing = loadPendingRequests(teamName);
+    const existing = loadPendingRequests(teamId);
     existing.push(request);
     fs.writeFileSync(pendingPath, JSON.stringify(existing, null, 2), 'utf-8');
   });

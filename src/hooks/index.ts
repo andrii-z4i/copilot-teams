@@ -17,7 +17,7 @@ import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 // ── Types ──
 
 export interface HookContext {
-  teamName: string;
+  teamId: string;
   teammateName?: string;
   taskId?: string;
   taskTitle?: string;
@@ -79,8 +79,8 @@ function runCommand(
 /**
  * Load hook configurations for a team.
  */
-export async function loadHooks(teamName: string): Promise<HookConfig[]> {
-  const filePath = resolvePath(teamName, HOOKS_FILE);
+export async function loadHooks(teamId: string): Promise<HookConfig[]> {
+  const filePath = resolvePath(teamId, HOOKS_FILE);
   try {
     const raw = await fs.readFile(filePath, 'utf-8');
     return JSON.parse(raw);
@@ -93,10 +93,10 @@ export async function loadHooks(teamName: string): Promise<HookConfig[]> {
  * Save hook configurations for a team (QG-4).
  */
 export async function saveHooks(
-  teamName: string,
+  teamId: string,
   hooks: HookConfig[]
 ): Promise<void> {
-  const filePath = resolvePath(teamName, HOOKS_FILE);
+  const filePath = resolvePath(teamId, HOOKS_FILE);
   await atomicWriteFile(filePath, JSON.stringify(hooks, null, 2));
 }
 
@@ -104,10 +104,10 @@ export async function saveHooks(
  * Get hooks configured for a specific event.
  */
 export async function getHooksForEvent(
-  teamName: string,
+  teamId: string,
   event: HookEvent
 ): Promise<HookConfig[]> {
-  const hooks = await loadHooks(teamName);
+  const hooks = await loadHooks(teamId);
   return hooks.filter((h) => h.event === event);
 }
 
@@ -144,11 +144,11 @@ export function runHook(hook: HookConfig, context: HookContext): HookResult {
  * If any hook vetoes, the transition should be prevented.
  */
 export async function runHooksForEvent(
-  teamName: string,
+  teamId: string,
   event: HookEvent,
   context: HookContext
 ): Promise<HookResult[]> {
-  const hooks = await getHooksForEvent(teamName, event);
+  const hooks = await getHooksForEvent(teamId, event);
   return hooks.map((hook) => runHook(hook, context));
 }
 
@@ -161,11 +161,11 @@ export async function runHooksForEvent(
  * Returns { allowIdle: false, feedback } if a hook vetoed.
  */
 export async function onTeammateIdle(
-  teamName: string,
+  teamId: string,
   teammateName: string
 ): Promise<{ allowIdle: boolean; feedback: string | null }> {
-  const results = await runHooksForEvent(teamName, 'TeammateIdle', {
-    teamName,
+  const results = await runHooksForEvent(teamId, 'TeammateIdle', {
+    teamId,
     teammateName,
   });
 
@@ -183,13 +183,13 @@ export async function onTeammateIdle(
  * Returns { allowCompletion: false, feedback } if a hook vetoed.
  */
 export async function onTaskCompleted(
-  teamName: string,
+  teamId: string,
   taskId: string,
   taskTitle: string,
   teammateName?: string
 ): Promise<{ allowCompletion: boolean; feedback: string | null }> {
-  const results = await runHooksForEvent(teamName, 'TaskCompleted', {
-    teamName,
+  const results = await runHooksForEvent(teamId, 'TaskCompleted', {
+    teamId,
     taskId,
     taskTitle,
     teammateName,

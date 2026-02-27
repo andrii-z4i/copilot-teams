@@ -103,8 +103,8 @@ function parseBacklog(content: string): Task[] {
 /**
  * Read the full task list (TS-3). Available to all team members.
  */
-export function readTaskList(teamName: string): Task[] {
-  const backlogPath = resolveTeamFile(teamName, 'backlog');
+export function readTaskList(teamId: string): Task[] {
+  const backlogPath = resolveTeamFile(teamId, 'backlog');
   if (!fs.existsSync(backlogPath)) return [];
   const content = fs.readFileSync(backlogPath, 'utf-8');
   return parseBacklog(content);
@@ -113,8 +113,8 @@ export function readTaskList(teamName: string): Task[] {
 /**
  * Write the full task list to disk atomically (Lead-only).
  */
-function writeTaskList(teamName: string, tasks: Task[]): void {
-  const backlogPath = resolveTeamFile(teamName, 'backlog');
+function writeTaskList(teamId: string, tasks: Task[]): void {
+  const backlogPath = resolveTeamFile(teamId, 'backlog');
   ensureDir(path.dirname(backlogPath));
   atomicWriteFile(backlogPath, serializeBacklog(tasks));
 }
@@ -156,13 +156,13 @@ function hasDependencyCycle(tasks: Task[], newTaskId: string, dependencies: stri
  * Create a new task (TS-4). Lead-only.
  */
 export async function createTask(
-  teamName: string,
+  teamId: string,
   task: Omit<Task, 'status' | 'createdAt' | 'updatedAt'> & { status?: TaskStatus },
 ): Promise<Task> {
-  const backlogPath = resolveTeamFile(teamName, 'backlog');
+  const backlogPath = resolveTeamFile(teamId, 'backlog');
 
   return withLock(backlogPath, () => {
-    const tasks = readTaskList(teamName);
+    const tasks = readTaskList(teamId);
 
     // Check for duplicate ID
     if (tasks.some((t) => t.id === task.id)) {
@@ -192,7 +192,7 @@ export async function createTask(
     };
 
     tasks.push(newTask);
-    writeTaskList(teamName, tasks);
+    writeTaskList(teamId, tasks);
     return newTask;
   });
 }
@@ -202,13 +202,13 @@ export async function createTask(
  * Much more efficient than calling createTask() N times in parallel.
  */
 export async function createTasksBatch(
-  teamName: string,
+  teamId: string,
   taskInputs: Array<Omit<Task, 'status' | 'createdAt' | 'updatedAt'> & { status?: TaskStatus }>,
 ): Promise<Task[]> {
-  const backlogPath = resolveTeamFile(teamName, 'backlog');
+  const backlogPath = resolveTeamFile(teamId, 'backlog');
 
   return withLock(backlogPath, () => {
-    const tasks = readTaskList(teamName);
+    const tasks = readTaskList(teamId);
     const now = new Date().toISOString();
     const created: Task[] = [];
 
@@ -241,7 +241,7 @@ export async function createTasksBatch(
       created.push(newTask);
     }
 
-    writeTaskList(teamName, tasks);
+    writeTaskList(teamId, tasks);
     return created;
   });
 }
@@ -251,11 +251,11 @@ export async function createTasksBatch(
  * Caller MUST hold the lock on backlog.md.
  */
 export function updateTaskInternal(
-  teamName: string,
+  teamId: string,
   taskId: string,
   updates: Partial<Pick<Task, 'title' | 'description' | 'assignee' | 'complexity' | 'status' | 'dependencies'>>,
 ): Task {
-  const tasks = readTaskList(teamName);
+  const tasks = readTaskList(teamId);
   const idx = tasks.findIndex((t) => t.id === taskId);
   if (idx === -1) {
     throw new Error(`Task "${taskId}" not found.`);
@@ -294,7 +294,7 @@ export function updateTaskInternal(
   };
 
   tasks[idx] = updated;
-  writeTaskList(teamName, tasks);
+  writeTaskList(teamId, tasks);
   return updated;
 }
 
@@ -302,31 +302,31 @@ export function updateTaskInternal(
  * Update an existing task (TS-4). Lead-only.
  */
 export async function updateTask(
-  teamName: string,
+  teamId: string,
   taskId: string,
   updates: Partial<Pick<Task, 'title' | 'description' | 'assignee' | 'complexity' | 'status' | 'dependencies'>>,
 ): Promise<Task> {
-  const backlogPath = resolveTeamFile(teamName, 'backlog');
+  const backlogPath = resolveTeamFile(teamId, 'backlog');
 
   return withLock(backlogPath, () => {
-    return updateTaskInternal(teamName, taskId, updates);
+    return updateTaskInternal(teamId, taskId, updates);
   });
 }
 
 /**
  * Delete a task (TS-4). Lead-only.
  */
-export async function deleteTask(teamName: string, taskId: string): Promise<void> {
-  const backlogPath = resolveTeamFile(teamName, 'backlog');
+export async function deleteTask(teamId: string, taskId: string): Promise<void> {
+  const backlogPath = resolveTeamFile(teamId, 'backlog');
 
   await withLock(backlogPath, () => {
-    const tasks = readTaskList(teamName);
+    const tasks = readTaskList(teamId);
     const idx = tasks.findIndex((t) => t.id === taskId);
     if (idx === -1) {
       throw new Error(`Task "${taskId}" not found.`);
     }
     tasks.splice(idx, 1);
-    writeTaskList(teamName, tasks);
+    writeTaskList(teamId, tasks);
   });
 }
 
@@ -372,10 +372,10 @@ export function isTaskBlocked(task: Task, allTasks: Task[]): boolean {
  * Lead mediates this — re-evaluates blocked tasks atomically.
  */
 export async function resolveCompletedDependencies(
-  teamName: string,
+  teamId: string,
   completedTaskId: string,
 ): Promise<Task[]> {
-  const tasks = readTaskList(teamName);
+  const tasks = readTaskList(teamId);
 
   // Find tasks that depend on the just-completed task
   const newlyUnblocked = tasks.filter((t) => {

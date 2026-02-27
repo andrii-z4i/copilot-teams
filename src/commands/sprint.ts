@@ -3,6 +3,7 @@
  */
 
 import { parseFlags, resolveTeamName } from './helpers.js';
+import { loadTeam } from '../team/index.js';
 import {
   startSprint,
   activateSprint,
@@ -42,13 +43,15 @@ export async function cmdSprint(args: string[]): Promise<void> {
   }
 
   const teamName = resolveTeamName(flags);
+  const team = loadTeam(teamName);
+  const tid = team.teamId;
 
   switch (sub) {
     case 'start': {
       const num = Number(positional[1]);
       if (!num) { console.error('Usage: copilot-teams sprint start <number> --tasks T-1,T-2'); process.exit(1); }
       const taskIds = flags['tasks']?.split(',').map((s) => s.trim()) ?? [];
-      await startSprint(teamName, num, taskIds);
+      await startSprint(tid, num, taskIds);
       console.log(`✓ Sprint #${num} started (planning).`);
       break;
     }
@@ -56,14 +59,14 @@ export async function cmdSprint(args: string[]): Promise<void> {
       const num = Number(positional[1]);
       if (!num) { console.error('Usage: copilot-teams sprint activate <number> --assignments \'[...]\''); process.exit(1); }
       const assignments = flags['assignments'] ? JSON.parse(flags['assignments']) : [];
-      await activateSprint(teamName, num, assignments);
+      await activateSprint(tid, num, assignments);
       console.log(`✓ Sprint #${num} activated.`);
       break;
     }
     case 'close': {
       const num = Number(positional[1]);
       if (!num) { console.error('Usage: copilot-teams sprint close <number>'); process.exit(1); }
-      const result = await closeSprint(teamName, num);
+      const result = await closeSprint(tid, num);
       console.log(`✓ Sprint #${num} closed.`);
       if (result.unfinishedTaskIds.length > 0) {
         console.log(`  Unfinished tasks returned to backlog: ${result.unfinishedTaskIds.join(', ')}`);
@@ -71,7 +74,7 @@ export async function cmdSprint(args: string[]): Promise<void> {
       break;
     }
     case 'show': {
-      const sprint = await getCurrentSprint(teamName);
+      const sprint = await getCurrentSprint(tid);
       if (!sprint) {
         console.log('No active sprint.');
         return;
@@ -88,7 +91,7 @@ export async function cmdSprint(args: string[]): Promise<void> {
     }
     case 'list':
     case 'ls': {
-      const sprints = await readSprints(teamName);
+      const sprints = await readSprints(tid);
       if (sprints.length === 0) {
         console.log('No sprints.');
         return;

@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseFlags, resolveSessionId, resolveTeamName, printKV, saveLastTeam } from './helpers.js';
-import { createTeam, loadTeam, cleanupTeam } from '../team/index.js';
+import { createTeam, loadTeam, loadTeamByDir, cleanupTeam } from '../team/index.js';
 import { TEAMS_BASE_DIR } from '../constants.js';
 import { warnTeamSize } from '../utils/cost.js';
 
@@ -77,7 +77,7 @@ export async function cmdTeam(args: string[]): Promise<void> {
         return;
       }
       for (const entry of teams) {
-        const t = loadTeam(entry.name);
+        const t = loadTeamByDir(entry.name);
         console.log(`${t.teamName}  lead=${t.leadSessionId}  members=${t.members.length}  created=${t.createdAt}`);
       }
       break;

@@ -106,7 +106,8 @@ src/
 
 ```jsonc
 {
-  "teamName": "swift-falcon-a3b2",
+  "teamId": "550e8400-e29b-41d4-a716-446655440000",  // UUID v4 — used as the directory name
+  "teamName": "swift-falcon-a3b2",                    // Human-readable name for display and MCP APIs
   "leadSessionId": "session-uuid",
   "createdAt": "2026-02-26T10:00:00Z",
   "members": [
@@ -121,6 +122,10 @@ src/
   ]
 }
 ```
+
+The team directory is named by `teamId` (e.g., `~/.copilot/teams/550e8400-e29b-41d4-a716-446655440000/`), ensuring global uniqueness across all teams. The human-readable `teamName` is used in CLI commands and MCP tool calls (e.g., `--team-name swift-falcon-a3b2`).
+
+On cleanup, only `config.json` is removed. All artifact files (backlog, messages, sprint state, reports, etc.) are preserved in the `teamId` directory for future audit.
 
 ### 3.2 Task (`backlog.md`)
 
@@ -556,7 +561,7 @@ The `run_team` tool is a high-level orchestration tool that automates the full l
 | No nested teams | Teammates can't delegate | Decompose tasks instead |
 | Fixed leadership | No failover | User restarts if Lead crashes |
 | Single-use permissions slow repetitive ops | Teammate throughput | By design for safety |
-| Append-only files grow unbounded | Disk usage over long sessions | Team cleanup removes all files |
+| Append-only files grow unbounded | Disk usage over long sessions | Team cleanup preserves artifact files; disk space must be managed manually |
 
 ---
 

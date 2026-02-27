@@ -42,7 +42,7 @@ export interface OrphanDetectionResult {
  * Sends a message to the lead with crash details.
  */
 export async function notifyCrash(
-  teamName: string,
+  teamId: string,
   notification: CrashNotification
 ): Promise<void> {
   const body =
@@ -53,7 +53,7 @@ export async function notifyCrash(
       ? `Last stderr: ${notification.lastStderr.slice(0, 200)}`
       : 'No stderr captured.');
 
-  await sendMessage(teamName, 'system', 'lead', body);
+  await sendMessage(teamId, 'system', 'lead', body);
 }
 
 /**
@@ -78,7 +78,6 @@ export function buildRespawnContext(
   assignedTaskIds?: string[],
 ): string {
   const team = loadTeam(teamName);
-  const original = team.members.find((m) => m.name === originalName);
 
   const lines: string[] = [
     `You are a RESPAWNED teammate replacing "${originalName}" on team "${teamName}".`,
@@ -96,7 +95,7 @@ export function buildRespawnContext(
   }
 
   // Include prior reports
-  const reportsPath = path.join(TEAMS_BASE_DIR, teamName, 'reports');
+  const reportsPath = path.join(TEAMS_BASE_DIR, team.teamId, 'reports');
   try {
     const files = fsSync.readdirSync(reportsPath);
     const priorReports = files.filter(f => f.startsWith(`${originalName}--`) && f.endsWith('.md'));
@@ -112,7 +111,7 @@ export function buildRespawnContext(
 
   // Include last messages from/to this teammate
   try {
-    const messagesPath = path.join(TEAMS_BASE_DIR, teamName, 'messages.md');
+    const messagesPath = path.join(TEAMS_BASE_DIR, team.teamId, 'messages.md');
     const content = fsSync.readFileSync(messagesPath, 'utf-8');
     const tmLines = content.split('\n').filter(l =>
       l.includes(`[${originalName}]`) || l.includes(`] [${originalName}]`)
@@ -165,9 +164,9 @@ export async function spawnReplacement(
  * Lockfiles are `.lock` files left behind after unclean shutdown.
  */
 export async function detectStaleLockfiles(
-  teamName: string
+  teamId: string
 ): Promise<string[]> {
-  const teamDir = resolvePath(teamName);
+  const teamDir = resolvePath(teamId);
   const stale: string[] = [];
 
   try {
@@ -194,9 +193,9 @@ export async function detectStaleLockfiles(
  * Clean up stale lockfiles by removing them.
  */
 export async function cleanStaleLockfiles(
-  teamName: string
+  teamId: string
 ): Promise<string[]> {
-  const stale = await detectStaleLockfiles(teamName);
+  const stale = await detectStaleLockfiles(teamId);
   for (const lockPath of stale) {
     try {
       await fs.rm(lockPath, { recursive: true, force: true });
@@ -257,7 +256,8 @@ function isProcessRunning(pid: number): boolean {
 export async function detectOrphans(
   teamName: string
 ): Promise<OrphanDetectionResult> {
-  const staleLockfiles = await detectStaleLockfiles(teamName);
+  const team = loadTeam(teamName);
+  const staleLockfiles = await detectStaleLockfiles(team.teamId);
   const orphanedPids = detectOrphanedProcesses(teamName);
   return { staleLockfiles, orphanedPids };
 }

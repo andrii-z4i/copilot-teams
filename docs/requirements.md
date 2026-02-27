@@ -59,9 +59,9 @@ All shared coordination files MUST follow append-only semantics unless explicitl
 |----|-------------|
 | TL-1 | The user MUST be able to create a team by describing the task and desired team structure in natural language to the lead. |
 | TL-2 | The lead MUST be able to propose team creation autonomously when it determines a task would benefit from parallel work. The user MUST confirm before the team is created. |
-| TL-3 | On creation, the system MUST generate a unique team name and persist a team config file locally. |
+| TL-3 | On creation, the system MUST generate a unique team name and a unique `teamId` (UUID). The team config is persisted under the `teamId` directory. |
 | TL-4 | The team config MUST contain a `members` array with each teammate's name, agent ID, and agent type. |
-| TL-5 | Team config MUST be stored at `~/.copilot/teams/{team-name}/config.json`. |
+| TL-5 | Team config MUST be stored at `~/.copilot/teams/{team-id}/config.json`, where `{team-id}` is a UUID assigned at creation time. |
 
 #### 3.1.2 Team Cleanup
 
@@ -69,7 +69,7 @@ All shared coordination files MUST follow append-only semantics unless explicitl
 |----|-------------|
 | TL-6 | The user MUST be able to instruct the lead to clean up the team. |
 | TL-7 | Cleanup MUST fail with a clear error if any teammates are still running. Teammates must be shut down first. |
-| TL-8 | Cleanup MUST remove shared team resources (config, task list, mailbox state). |
+| TL-8 | Cleanup MUST remove only the team config file (`config.json`), making the team no longer discoverable. All artifact files (backlog, messages, sprint state, reports, etc.) MUST be preserved in the team directory for future audit. |
 
 #### 3.1.3 Constraints
 

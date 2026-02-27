@@ -17,14 +17,14 @@ import type { Task } from '../types.js';
  * Validates the task is pending and unblocked, then transitions to in_progress.
  */
 export async function assignTask(
-  teamName: string,
+  teamId: string,
   taskId: string,
   teammateName: string,
 ): Promise<Task> {
-  const backlogPath = resolveTeamFile(teamName, 'backlog');
+  const backlogPath = resolveTeamFile(teamId, 'backlog');
 
   return withLock(backlogPath, async () => {
-    const tasks = readTaskList(teamName);
+    const tasks = readTaskList(teamId);
     const task = tasks.find((t) => t.id === taskId);
 
     if (!task) {
@@ -48,7 +48,7 @@ export async function assignTask(
     }
 
     // Assign and transition to in_progress
-    const updated = updateTaskInternal(teamName, taskId, {
+    const updated = updateTaskInternal(teamId, taskId, {
       assignee: teammateName,
       status: 'in_progress',
     });
@@ -56,7 +56,7 @@ export async function assignTask(
     // Notify teammate via mailbox
     try {
       await sendMessage(
-        teamName,
+        teamId,
         'lead',
         teammateName,
         `[ASSIGNED] Task ${taskId}: ${task.title} has been assigned to you.`,
@@ -79,14 +79,14 @@ export async function assignTask(
  * Returns the claimed task or null if none available.
  */
 export async function claimNextTask(
-  teamName: string,
+  teamId: string,
   teammateName: string,
   sprintTaskIds?: string[],
 ): Promise<Task | null> {
-  const backlogPath = resolveTeamFile(teamName, 'backlog');
+  const backlogPath = resolveTeamFile(teamId, 'backlog');
 
   return withLock(backlogPath, async () => {
-    const tasks = readTaskList(teamName);
+    const tasks = readTaskList(teamId);
 
     // Find pending tasks assigned to this teammate in the current sprint
     let candidates = tasks.filter(
@@ -105,7 +105,7 @@ export async function claimNextTask(
 
     // Claim the first available
     const toClaim = candidates[0];
-    const claimed = updateTaskInternal(teamName, toClaim.id, {
+    const claimed = updateTaskInternal(teamId, toClaim.id, {
       status: 'in_progress',
     });
 
@@ -125,11 +125,11 @@ export interface AutoPickupResult {
  * If no tasks remain, teammate goes idle (TS-11).
  */
 export async function autoPickupNextTask(
-  teamName: string,
+  teamId: string,
   teammateName: string,
   sprintTaskIds: string[],
 ): Promise<AutoPickupResult> {
-  const tasks = readTaskList(teamName);
+  const tasks = readTaskList(teamId);
 
   // Find pending tasks assigned to this teammate in this sprint
   const remaining = tasks.filter(
@@ -145,7 +145,7 @@ export async function autoPickupNextTask(
   }
 
   // Claim the next one
-  const next = await claimNextTask(teamName, teammateName, sprintTaskIds);
+  const next = await claimNextTask(teamId, teammateName, sprintTaskIds);
   return { nextTask: next, idle: next === null };
 }
 
@@ -153,11 +153,11 @@ export async function autoPickupNextTask(
  * Get all tasks assigned to a teammate in a given sprint scope.
  */
 export function getTeammateSprintTasks(
-  teamName: string,
+  teamId: string,
   teammateName: string,
   sprintTaskIds: string[],
 ): Task[] {
-  const tasks = readTaskList(teamName);
+  const tasks = readTaskList(teamId);
   return tasks.filter(
     (t) => t.assignee === teammateName && sprintTaskIds.includes(t.id),
   );

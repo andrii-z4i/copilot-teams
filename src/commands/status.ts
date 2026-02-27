@@ -28,9 +28,9 @@ export async function cmdStatus(args: string[]): Promise<void> {
 
   const teamName = resolveTeamName(flags);
   const team = loadTeam(teamName);
-  const tasks = await readTaskList(teamName);
-  const sprint = await getCurrentSprint(teamName);
-  const fileClaims = await getActiveFileClaims(teamName);
+  const tasks = await readTaskList(team.teamId);
+  const sprint = await getCurrentSprint(team.teamId);
+  const fileClaims = await getActiveFileClaims(team.teamId);
   const crashed = getCrashedTeammates(teamName);
 
   // Header

@@ -15,7 +15,7 @@ import type { ComplexitySize, Task } from '../types.js';
 // ── Types ──
 
 export interface PlanningPokerSession {
-  teamName: string;
+  teamId: string;
   taskId: string;
   estimates: Map<string, ComplexitySize>;
   resolved: boolean;
@@ -40,12 +40,12 @@ function sizeRank(size: ComplexitySize): number {
 
 // ── Estimates Storage ──
 
-function estimatesFilePath(teamName: string): string {
-  return path.join(path.dirname(resolveTeamFile(teamName, 'config')), 'estimates.json');
+function estimatesFilePath(teamId: string): string {
+  return path.join(path.dirname(resolveTeamFile(teamId, 'config')), 'estimates.json');
 }
 
-function loadEstimatesFile(teamName: string): EstimatesFile {
-  const filePath = estimatesFilePath(teamName);
+function loadEstimatesFile(teamId: string): EstimatesFile {
+  const filePath = estimatesFilePath(teamId);
   if (!fs.existsSync(filePath)) return {};
   try {
     return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as EstimatesFile;
@@ -54,8 +54,8 @@ function loadEstimatesFile(teamName: string): EstimatesFile {
   }
 }
 
-function saveEstimatesFile(teamName: string, data: EstimatesFile): void {
-  const filePath = estimatesFilePath(teamName);
+function saveEstimatesFile(teamId: string, data: EstimatesFile): void {
+  const filePath = estimatesFilePath(teamId);
   ensureDir(path.dirname(filePath));
   atomicWriteFile(filePath, JSON.stringify(data, null, 2));
 }
@@ -66,14 +66,14 @@ function saveEstimatesFile(teamName: string, data: EstimatesFile): void {
  * Start a planning poker session for the given tasks (TS-15).
  * Creates estimate slots; teammates submit independently.
  */
-export function startPlanningPoker(teamName: string, taskIds: string[]): void {
-  const data = loadEstimatesFile(teamName);
+export function startPlanningPoker(teamId: string, taskIds: string[]): void {
+  const data = loadEstimatesFile(teamId);
   for (const taskId of taskIds) {
     if (!data[taskId]) {
       data[taskId] = { estimates: {}, resolved: false };
     }
   }
-  saveEstimatesFile(teamName, data);
+  saveEstimatesFile(teamId, data);
 }
 
 /**
@@ -81,7 +81,7 @@ export function startPlanningPoker(teamName: string, taskIds: string[]): void {
  * Estimates are hidden until all have submitted (to prevent anchoring).
  */
 export function submitEstimate(
-  teamName: string,
+  teamId: string,
   taskId: string,
   teammateName: string,
   size: ComplexitySize,
@@ -90,7 +90,7 @@ export function submitEstimate(
     throw new Error(`Invalid complexity size "${size}". Valid: ${SIZE_ORDER.join(', ')}`);
   }
 
-  const data = loadEstimatesFile(teamName);
+  const data = loadEstimatesFile(teamId);
   if (!data[taskId]) {
     throw new Error(`No planning poker session found for task "${taskId}". Start one first.`);
   }
@@ -99,7 +99,7 @@ export function submitEstimate(
   }
 
   data[taskId].estimates[teammateName] = size;
-  saveEstimatesFile(teamName, data);
+  saveEstimatesFile(teamId, data);
 }
 
 /**
@@ -107,11 +107,11 @@ export function submitEstimate(
  * (to prevent anchoring — TS-15).
  */
 export function getEstimates(
-  teamName: string,
+  teamId: string,
   taskId: string,
   allTeammateNames: string[],
 ): { allSubmitted: boolean; estimates: Record<string, ComplexitySize | null> } {
-  const data = loadEstimatesFile(teamName);
+  const data = loadEstimatesFile(teamId);
   const session = data[taskId];
   if (!session) {
     throw new Error(`No planning poker session for task "${taskId}".`);
@@ -133,10 +133,10 @@ export function getEstimates(
  * Assigns the resolved complexity to the task (TS-13).
  */
 export async function resolveEstimates(
-  teamName: string,
+  teamId: string,
   taskId: string,
 ): Promise<ComplexitySize> {
-  const data = loadEstimatesFile(teamName);
+  const data = loadEstimatesFile(teamId);
   const session = data[taskId];
   if (!session) {
     throw new Error(`No planning poker session for task "${taskId}".`);
@@ -163,10 +163,10 @@ export async function resolveEstimates(
   // Update estimates file
   data[taskId].resolved = true;
   data[taskId].finalSize = resolved;
-  saveEstimatesFile(teamName, data);
+  saveEstimatesFile(teamId, data);
 
   // Assign complexity to task (TS-13)
-  await updateTask(teamName, taskId, { complexity: resolved });
+  await updateTask(teamId, taskId, { complexity: resolved });
 
   return resolved;
 }
@@ -176,8 +176,8 @@ export async function resolveEstimates(
 /**
  * Calculate the total weight of tasks assigned to a teammate (TS-16).
  */
-export function calculateTeammateLoad(teamName: string, teammateName: string): number {
-  const tasks = readTaskList(teamName);
+export function calculateTeammateLoad(teamId: string, teammateName: string): number {
+  const tasks = readTaskList(teamId);
   return tasks
     .filter(
       (t) =>

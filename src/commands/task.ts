@@ -3,6 +3,7 @@
  */
 
 import { parseFlags, resolveTeamName } from './helpers.js';
+import { loadTeam } from '../team/index.js';
 import {
   createTask,
   readTaskList,
@@ -48,6 +49,8 @@ export async function cmdTask(args: string[]): Promise<void> {
   }
 
   const teamName = resolveTeamName(flags);
+  const team = loadTeam(teamName);
+  const tid = team.teamId;
 
   switch (sub) {
     case 'add': {
@@ -58,7 +61,7 @@ export async function cmdTask(args: string[]): Promise<void> {
         process.exit(1);
       }
       const deps = flags['deps'] ? flags['deps'].split(',').map((d) => d.trim()) : [];
-      await createTask(teamName, {
+      await createTask(tid, {
         id,
         title,
         description: flags['desc'] ?? '',
@@ -69,7 +72,7 @@ export async function cmdTask(args: string[]): Promise<void> {
     }
     case 'list':
     case 'ls': {
-      const tasks = await readTaskList(teamName);
+      const tasks = await readTaskList(tid);
       if (tasks.length === 0) {
         console.log('No tasks in backlog.');
         return;
@@ -88,11 +91,11 @@ export async function cmdTask(args: string[]): Promise<void> {
     case 'update': {
       const id = positional[1];
       if (!id) { console.error('Usage: copilot-teams task update <id> --status completed'); process.exit(1); }
-      const updates: Record<string, any> = {};
+      const updates: Record<string, unknown> = {};
       if (flags['status']) updates.status = flags['status'];
       if (flags['assignee']) updates.assignee = flags['assignee'];
       if (flags['title']) updates.title = flags['title'];
-      await updateTask(teamName, id, updates);
+      await updateTask(tid, id, updates);
       console.log(`✓ Task ${id} updated.`);
       break;
     }
@@ -103,14 +106,14 @@ export async function cmdTask(args: string[]): Promise<void> {
         console.error('Usage: copilot-teams task assign <task-id> <teammate>');
         process.exit(1);
       }
-      await assignTask(teamName, id, teammate);
+      await assignTask(tid, id, teammate);
       console.log(`✓ ${id} assigned to ${teammate}.`);
       break;
     }
     case 'claim': {
       const teammate = positional[1];
       if (!teammate) { console.error('Usage: copilot-teams task claim <teammate>'); process.exit(1); }
-      const task = await claimNextTask(teamName, teammate);
+      const task = await claimNextTask(tid, teammate);
       if (task) {
         console.log(`✓ ${teammate} claimed ${task.id}: ${task.title}`);
       } else {
@@ -122,7 +125,7 @@ export async function cmdTask(args: string[]): Promise<void> {
     case 'rm': {
       const id = positional[1];
       if (!id) { console.error('Usage: copilot-teams task delete <id>'); process.exit(1); }
-      await deleteTask(teamName, id);
+      await deleteTask(tid, id);
       console.log(`✓ Task ${id} deleted.`);
       break;
     }

@@ -45,8 +45,8 @@ const MAX_REVISIONS = 3;
 
 // ── Internal helpers ──
 
-async function readPlans(teamName: string): Promise<PlanApprovalRequest[]> {
-  const filePath = resolvePath(teamName, PLANS_FILE);
+async function readPlans(teamId: string): Promise<PlanApprovalRequest[]> {
+  const filePath = resolvePath(teamId, PLANS_FILE);
   try {
     const raw = await fs.readFile(filePath, 'utf-8');
     return JSON.parse(raw);
@@ -56,17 +56,17 @@ async function readPlans(teamName: string): Promise<PlanApprovalRequest[]> {
 }
 
 async function writePlans(
-  teamName: string,
+  teamId: string,
   plans: PlanApprovalRequest[]
 ): Promise<void> {
-  const filePath = resolvePath(teamName, PLANS_FILE);
+  const filePath = resolvePath(teamId, PLANS_FILE);
   await atomicWriteFile(filePath, JSON.stringify(plans, null, 2));
 }
 
 async function readTeammateStates(
-  teamName: string
+  teamId: string
 ): Promise<TeammateState[]> {
-  const filePath = resolvePath(teamName, TEAMMATE_STATES_FILE);
+  const filePath = resolvePath(teamId, TEAMMATE_STATES_FILE);
   try {
     const raw = await fs.readFile(filePath, 'utf-8');
     return JSON.parse(raw);
@@ -76,10 +76,10 @@ async function readTeammateStates(
 }
 
 async function writeTeammateStates(
-  teamName: string,
+  teamId: string,
   states: TeammateState[]
 ): Promise<void> {
-  const filePath = resolvePath(teamName, TEAMMATE_STATES_FILE);
+  const filePath = resolvePath(teamId, TEAMMATE_STATES_FILE);
   await atomicWriteFile(filePath, JSON.stringify(states, null, 2));
 }
 
@@ -90,13 +90,13 @@ async function writeTeammateStates(
  * In plan mode the teammate can explore code but MUST NOT modify files.
  */
 export async function enterPlanMode(
-  teamName: string,
+  teamId: string,
   teammateName: string,
   taskId: string
 ): Promise<TeammateState> {
-  const lockPath = resolvePath(teamName, TEAMMATE_STATES_FILE);
+  const lockPath = resolvePath(teamId, TEAMMATE_STATES_FILE);
   return withLock(lockPath, async () => {
-    const states = await readTeammateStates(teamName);
+    const states = await readTeammateStates(teamId);
     let state = states.find((s) => s.name === teammateName);
     if (state) {
       state.mode = 'plan';
@@ -105,7 +105,7 @@ export async function enterPlanMode(
       state = { name: teammateName, mode: 'plan', currentTaskId: taskId };
       states.push(state);
     }
-    await writeTeammateStates(teamName, states);
+    await writeTeammateStates(teamId, states);
     return { ...state };
   });
 }
@@ -114,10 +114,10 @@ export async function enterPlanMode(
  * Get the current operating mode of a teammate.
  */
 export async function getTeammateMode(
-  teamName: string,
+  teamId: string,
   teammateName: string
 ): Promise<TeammateState | undefined> {
-  const states = await readTeammateStates(teamName);
+  const states = await readTeammateStates(teamId);
   return states.find((s) => s.name === teammateName);
 }
 
@@ -125,10 +125,10 @@ export async function getTeammateMode(
  * Check whether a teammate is in plan mode (cannot write files).
  */
 export async function isInPlanMode(
-  teamName: string,
+  teamId: string,
   teammateName: string
 ): Promise<boolean> {
-  const state = await getTeammateMode(teamName, teammateName);
+  const state = await getTeammateMode(teamId, teammateName);
   return state?.mode === 'plan';
 }
 
@@ -137,14 +137,14 @@ export async function isInPlanMode(
  * Returns the created request. The teammate blocks until reviewed.
  */
 export async function submitPlanForApproval(
-  teamName: string,
+  teamId: string,
   teammateName: string,
   taskId: string,
   plan: string
 ): Promise<PlanApprovalRequest> {
-  const lockPath = resolvePath(teamName, PLANS_FILE);
+  const lockPath = resolvePath(teamId, PLANS_FILE);
   return withLock(lockPath, async () => {
-    const plans = await readPlans(teamName);
+    const plans = await readPlans(teamId);
 
     // Count prior revisions for this teammate + task
     const priorRevisions = plans.filter(
@@ -169,7 +169,7 @@ export async function submitPlanForApproval(
     };
 
     plans.push(request);
-    await writePlans(teamName, plans);
+    await writePlans(teamId, plans);
     return request;
   });
 }
@@ -182,14 +182,14 @@ export async function submitPlanForApproval(
  * After MAX_REVISIONS rejections: task returns to backlog, teammate goes idle.
  */
 export async function reviewPlan(
-  teamName: string,
+  teamId: string,
   requestId: string,
   decision: 'approved' | 'rejected',
   feedback?: string
 ): Promise<PlanApprovalRequest> {
-  const lockPath = resolvePath(teamName, PLANS_FILE);
+  const lockPath = resolvePath(teamId, PLANS_FILE);
   return withLock(lockPath, async () => {
-    const plans = await readPlans(teamName);
+    const plans = await readPlans(teamId);
     const request = plans.find((p) => p.id === requestId);
     if (!request) {
       throw new Error(`Plan request ${requestId} not found`);
@@ -201,12 +201,12 @@ export async function reviewPlan(
     request.status = decision;
     request.feedback = feedback;
     request.reviewedAt = new Date().toISOString();
-    await writePlans(teamName, plans);
+    await writePlans(teamId, plans);
 
     // Update teammate state
-    const statesLock = resolvePath(teamName, TEAMMATE_STATES_FILE);
+    const statesLock = resolvePath(teamId, TEAMMATE_STATES_FILE);
     await withLock(statesLock, async () => {
-      const states = await readTeammateStates(teamName);
+      const states = await readTeammateStates(teamId);
       const state = states.find((s) => s.name === request.teammateName);
       if (state) {
         if (decision === 'approved') {
@@ -225,7 +225,7 @@ export async function reviewPlan(
           }
           // Otherwise stays in plan mode
         }
-        await writeTeammateStates(teamName, states);
+        await writeTeammateStates(teamId, states);
       }
     });
 
@@ -237,11 +237,11 @@ export async function reviewPlan(
  * Get all plan requests for a given teammate and task.
  */
 export async function getPlanHistory(
-  teamName: string,
+  teamId: string,
   teammateName: string,
   taskId: string
 ): Promise<PlanApprovalRequest[]> {
-  const plans = await readPlans(teamName);
+  const plans = await readPlans(teamId);
   return plans.filter(
     (p) => p.teammateName === teammateName && p.taskId === taskId
   );
@@ -251,9 +251,9 @@ export async function getPlanHistory(
  * Get pending plan requests awaiting review.
  */
 export async function getPendingPlans(
-  teamName: string
+  teamId: string
 ): Promise<PlanApprovalRequest[]> {
-  const plans = await readPlans(teamName);
+  const plans = await readPlans(teamId);
   return plans.filter((p) => p.status === 'pending');
 }
 
@@ -261,11 +261,11 @@ export async function getPendingPlans(
  * Count rejections for a teammate's task.
  */
 export async function getRejectionCount(
-  teamName: string,
+  teamId: string,
   teammateName: string,
   taskId: string
 ): Promise<number> {
-  const plans = await readPlans(teamName);
+  const plans = await readPlans(teamId);
   return plans.filter(
     (p) =>
       p.teammateName === teammateName &&
@@ -278,10 +278,10 @@ export async function getRejectionCount(
  * Set approval criteria that the lead uses to make decisions (PA-6).
  */
 export async function setApprovalCriteria(
-  teamName: string,
+  teamId: string,
   criteria: ApprovalCriteria
 ): Promise<void> {
-  const filePath = resolvePath(teamName, APPROVAL_CRITERIA_FILE);
+  const filePath = resolvePath(teamId, APPROVAL_CRITERIA_FILE);
   await atomicWriteFile(filePath, JSON.stringify(criteria, null, 2));
 }
 
@@ -289,9 +289,9 @@ export async function setApprovalCriteria(
  * Get the current approval criteria.
  */
 export async function getApprovalCriteria(
-  teamName: string
+  teamId: string
 ): Promise<ApprovalCriteria | null> {
-  const filePath = resolvePath(teamName, APPROVAL_CRITERIA_FILE);
+  const filePath = resolvePath(teamId, APPROVAL_CRITERIA_FILE);
   try {
     const raw = await fs.readFile(filePath, 'utf-8');
     return JSON.parse(raw);

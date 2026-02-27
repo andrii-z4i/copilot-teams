@@ -60,7 +60,7 @@ Add the MCP server to your Copilot CLI config:
 | `create_team` | Create a new team (you become the Lead) |
 | `list_teams` | List all teams |
 | `show_team` | Show team details and members |
-| `cleanup_team` | Remove a team and its data |
+| `cleanup_team` | Remove the team config (preserves artifact files for audit) |
 
 ### Teammate Management
 
@@ -295,7 +295,7 @@ copilot-teams team cleanup
 |---------|-------------|
 | `team create` | Create a new team (you become the Lead) |
 | `team show` | Show team configuration and members |
-| `team cleanup` | Remove team directory (all teammates must be stopped) |
+| `team cleanup` | Remove team config, preserving artifact files (all teammates must be stopped) |
 
 Options: `--team-name <name>`, `--session-id <id>`
 
@@ -422,10 +422,10 @@ Enable teams (in priority order):
 
 ## Data Storage
 
-All state lives under `~/.copilot/teams/{team-name}/`:
+All state lives under `~/.copilot/teams/{team-id}/`, where `{team-id}` is a UUID v4 assigned at team creation:
 
 ```
-config.json          Team configuration
+config.json          Team configuration (removed on cleanup; all other files are kept)
 backlog.md           Task list
 sprint.md            Sprint lifecycle
 messages.md          Mailbox (append-only)
@@ -435,6 +435,8 @@ hooks.json           Hook configuration
 reports/             Teammate findings (one .md per task/teammate)
 permission-audit.log Audit trail (append-only)
 ```
+
+The human-readable team name (e.g., `swift-falcon-a3b2`) is stored inside `config.json` and is used in CLI commands and MCP tool calls (`--team-name`). On cleanup, only `config.json` is deleted; all artifact files are preserved for future audit.
 
 ---
 
