@@ -75,9 +75,19 @@ describe('requestPermission & reviewPermission', () => {
     // The request promise should now resolve
     const result = await requestPromise;
     expect(result.decision).toBe('approved');
+
+    // TM-13: audit entry must be written when lead reviews a teammate request
+    const log = readAuditLog('test-team');
+    expect(log).toHaveLength(1);
+    expect(log[0].teammate).toBe('worker-a');
+    expect(log[0].operation).toBe('file_write');
+    expect(log[0].target).toBe('src/auth/login.ts');
+    expect(log[0].decision).toBe('approved');
+    expect(log[0].rationale).toBe('Within assigned task scope');
+    expect(log[0].timestamp).toBeTruthy();
   });
 
-  it('denied request blocks the operation (TM-10)', async () => {
+  it('denied request is traced in audit log (TM-10, TM-13)', async () => {
     const requestPromise = requestPermission(
       'test-team',
       'worker-a',
@@ -91,6 +101,34 @@ describe('requestPermission & reviewPermission', () => {
 
     const result = await requestPromise;
     expect(result.decision).toBe('denied');
+
+    // TM-13: denial must also be logged to the audit trail
+    const log = readAuditLog('test-team');
+    expect(log).toHaveLength(1);
+    expect(log[0].teammate).toBe('worker-a');
+    expect(log[0].operation).toBe('shell_command');
+    expect(log[0].target).toBe('rm -rf /');
+    expect(log[0].decision).toBe('denied');
+    expect(log[0].rationale).toBe('Dangerous command');
+  });
+
+  it('pending list is cleared after review and audit entry remains (TM-15)', async () => {
+    const requestPromise = requestPermission(
+      'test-team',
+      'worker-b',
+      'file_write',
+      'Write config',
+      'config/settings.json',
+    );
+
+    const pending = loadPendingRequests('test-team');
+    await reviewPermission('test-team', pending[0].id, 'approved', 'ok');
+    await requestPromise;
+
+    // Request removed from pending list after review
+    expect(loadPendingRequests('test-team')).toHaveLength(0);
+    // But audit entry persists (append-only)
+    expect(readAuditLog('test-team')).toHaveLength(1);
   });
 
   it('review throws for unknown request ID', async () => {
