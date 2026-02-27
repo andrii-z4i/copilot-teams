@@ -108,6 +108,19 @@ describe('createTeam', () => {
     const c2 = await createTeam({ leadSessionId: 'lead-2' });
     expect(c1.teamName).not.toBe(c2.teamName);
   });
+
+  it('initializes permission-audit.log, files.md, and hooks.json on creation', async () => {
+    const config = await createTeam({ leadSessionId: 'lead-1', teamName: 'audit-init-test' });
+    const teamDir = path.join(tmpBase, config.teamId);
+
+    expect(fs.existsSync(path.join(teamDir, 'permission-audit.log'))).toBe(true);
+    expect(fs.existsSync(path.join(teamDir, 'files.md'))).toBe(true);
+    expect(fs.existsSync(path.join(teamDir, 'hooks.json'))).toBe(true);
+
+    expect(fs.readFileSync(path.join(teamDir, 'permission-audit.log'), 'utf-8')).toBe('');
+    expect(fs.readFileSync(path.join(teamDir, 'files.md'), 'utf-8')).toBe('');
+    expect(JSON.parse(fs.readFileSync(path.join(teamDir, 'hooks.json'), 'utf-8'))).toEqual([]);
+  });
 });
 
 describe('loadTeam', () => {

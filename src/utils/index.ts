@@ -13,6 +13,7 @@ import {
   MESSAGES_FILE,
   SPRINT_FILE,
   FILES_FILE,
+  HOOKS_FILE,
   PERMISSION_AUDIT_FILE,
 } from '../constants.js';
 
@@ -24,6 +25,7 @@ const KNOWN_FILES = {
   messages: MESSAGES_FILE,
   sprint: SPRINT_FILE,
   files: FILES_FILE,
+  hooks: HOOKS_FILE,
   'permission-audit': PERMISSION_AUDIT_FILE,
 } as const;
 
