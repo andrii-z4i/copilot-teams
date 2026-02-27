@@ -480,7 +480,6 @@ server.tool(
     const task = await assignTask(tid, task_id, teammate_name);
     // Audit: log the assignment as a message from lead to teammate
     const team = safeLoadTeam(tn);
-    const tid = team.teamId;
     await sendMessage(tid, team.leadSessionId, teammate_name,
       `[ASSIGNED] Task "${task_id}" (${task.title}) assigned to you.`);
     return json(task);
@@ -550,7 +549,6 @@ server.tool(
     const sprint = await activateSprint(tid, sprint_number, assignments);
     // Audit: notify each teammate of their sprint assignments
     const team = safeLoadTeam(tn);
-    const tid = team.teamId;
     const byTeammate = new Map<string, string[]>();
     for (const a of assignments) {
       const list = byTeammate.get(a.teammate) ?? [];
@@ -746,7 +744,6 @@ server.tool(
     const result = await reviewPlan(tid, request_id, decision, feedback);
     // Audit: notify the teammate of the plan decision
     const team = safeLoadTeam(tn);
-    const tid = team.teamId;
     const decisionMsg = decision === 'approved'
       ? `[PLAN APPROVED] Your plan (${request_id}) has been approved. Proceed with implementation.`
       : `[PLAN REJECTED] Your plan (${request_id}) was rejected. Feedback: ${feedback ?? 'none'}`;
@@ -914,7 +911,6 @@ server.tool(
     fs.writeFileSync(filePath, content, 'utf-8');
     // Also log an audit message
     const team = safeLoadTeam(tn);
-    const tid = team.teamId;
     await sendMessage(tid, teammate_name, 'lead',
       `[REPORT SUBMITTED] Report for task "${task_id}": ${title}`);
     return text(`Report saved for task "${task_id}" by ${teammate_name}.`);
