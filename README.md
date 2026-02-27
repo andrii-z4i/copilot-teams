@@ -113,6 +113,32 @@ The MCP server exposes **46 tools** organized into these categories:
 
 Copilot calls `run_team` — a single tool that handles the full lifecycle.
 
+### Permission gating with audit trail
+
+> *"Create a team. Spawn a coder named tm-1 and assign it the database migration task. When it asks to run shell commands, approve it — but make sure everything is logged."*
+
+Copilot sets up the team. While tm-1 works, it hits a step that needs `shell_command` access:
+
+```
+tm-1 → request_permission("shell_command", "Run DB migration", "npm run db:migrate")
+     ← [PENDING — waiting for lead decision]
+
+You: "Show pending permission requests"
+→ Copilot calls list_pending_permissions
+  → [0] id: req-abc123  teammate: tm-1  operation: shell_command  target: npm run db:migrate
+
+You: "Approve it — the migration is safe"
+→ Copilot calls review_permission(id: "req-abc123", decision: "approved", rationale: "Migration reviewed and safe")
+  → tm-1 unblocks and executes npm run db:migrate
+
+You: "Show me the audit log"
+→ Copilot calls read_audit_log
+  → timestamp: 2026-02-27T13:00:00Z  teammate: tm-1  operation: shell_command
+     target: npm run db:migrate  decision: approved  rationale: Migration reviewed and safe
+```
+
+Every approval and denial — including the one above — is appended to `permission-audit.log` and survives team cleanup.
+
 ---
 
 ## How It Works

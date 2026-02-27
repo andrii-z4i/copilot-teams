@@ -287,7 +287,86 @@ copilot-teams team cleanup
 
 ---
 
-## Full CLI Command Reference
+### Worked example: permission request, review, and audit log
+
+This walkthrough shows the complete flow when a teammate needs approval for a privileged operation.
+
+#### 1. Teammate requests a permission
+
+While working on a task, `tm-1` needs to run a shell command and calls `request_permission` (or the Lead calls it on the teammate's behalf via the MCP tool):
+
+```bash
+# MCP tool call made by tm-1 (or the Lead on its behalf):
+# request_permission(
+#   teammateName: "tm-1",
+#   operation:    "shell_command",
+#   description:  "Run database migration",
+#   targetResource: "npm run db:migrate"
+# )
+```
+
+The request is stored as pending and `tm-1` blocks until the Lead responds.
+
+#### 2. Lead reviews pending requests
+
+```bash
+copilot-teams permission pending
+```
+```
+Pending permission requests (1):
+  [0] id: req-abc123
+      teammate: tm-1
+      operation: shell_command
+      target:   npm run db:migrate
+      description: Run database migration
+      requested: 2026-02-27T13:00:00.000Z
+```
+
+#### 3. Lead approves (or denies) the request
+
+```bash
+# MCP tool call (or via Copilot: "Approve req-abc123 — the migration is safe"):
+# review_permission(
+#   requestId: "req-abc123",
+#   decision:  "approved",
+#   rationale: "Migration script reviewed and safe to run"
+# )
+```
+
+`tm-1` unblocks immediately and executes `npm run db:migrate`.
+
+If the Lead had denied it:
+```bash
+# review_permission(requestId: "req-abc123", decision: "denied",
+#                   rationale: "Not within current sprint scope")
+# tm-1 receives denied — must not perform the operation
+```
+
+#### 4. Verify the audit log
+
+Every decision (approved **and** denied) is appended to `permission-audit.log`:
+
+```bash
+copilot-teams permission audit-log
+```
+```
+Permission audit log — 1 entry
+  [2026-02-27T13:00:05.123Z] tm-1  shell_command  npm run db:migrate
+    decision: approved
+    rationale: Migration script reviewed and safe to run
+```
+
+Directly inspect the file:
+```bash
+cat ~/.copilot/teams/<team-id>/permission-audit.log
+```
+```json
+{"timestamp":"2026-02-27T13:00:05.123Z","teammate":"tm-1","operation":"shell_command","target":"npm run db:migrate","decision":"approved","rationale":"Migration script reviewed and safe to run"}
+```
+
+The file is **append-only**: every subsequent permission decision adds a new JSON line. The file is created when the team is created (even if no permissions are ever requested), and is preserved after `team cleanup` so the audit trail is never lost.
+
+---
 
 ### `copilot-teams team`
 
