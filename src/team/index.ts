@@ -74,7 +74,12 @@ export function loadTeamByDir(dirName: string): TeamConfig {
     throw new Error(`Team directory "${dirName}" has no config at ${filePath}`);
   }
   const raw = fs.readFileSync(filePath, 'utf-8');
-  return JSON.parse(raw) as TeamConfig;
+  const config = JSON.parse(raw) as TeamConfig;
+  // Legacy teams used teamName as directory name and had no teamId field
+  if (!config.teamId) {
+    config.teamId = dirName;
+  }
+  return config;
 }
 
 /**
