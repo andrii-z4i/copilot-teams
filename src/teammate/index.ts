@@ -169,8 +169,11 @@ export function resetSpawnCommandBuilder(): void {
 function stripArgs(args: string[], flags: string[]): string[] {
   const result: string[] = [];
   for (let i = 0; i < args.length; i++) {
-    if (flags.includes(args[i]) && i + 1 < args.length) {
-      i++; // skip the flag value
+    if (flags.includes(args[i])) {
+      if (i + 1 < args.length) {
+        i++; // skip the flag value
+      }
+      // skip the flag itself (don't push to result)
     } else {
       result.push(args[i]);
     }
