@@ -142,7 +142,7 @@ describe('spawnTeammate', () => {
     const statuses = getTeammateStatuses('test-team');
     const worker = statuses.find((s) => s.name === 'model-worker');
     expect(worker).toBeDefined();
-    expect(worker!.model).toBe('gpt-5.2');
+    expect(worker!.model).toBe(constants.STICKY_TEAMMATE_MODEL);
   });
 
   it('project context (cwd) is inherited by teammate (TM-4)', async () => {
