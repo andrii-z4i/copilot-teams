@@ -12,6 +12,7 @@ import {
 } from '../teammate/index.js';
 import { warnTeamSize } from '../utils/cost.js';
 import { loadTeam } from '../team/index.js';
+import { STICKY_TEAMMATE_MODEL } from '../constants.js';
 
 const HELP = `
 Usage: copilot-teams teammate <subcommand> [options]
@@ -24,7 +25,6 @@ Subcommands:
 
 Options (spawn):
   --type <type>      Agent type (default: coder)
-  --model <model>    Model to use
   --prompt <text>    Initial prompt / instructions
   --team-name <name>
   --session-id <id>
@@ -55,10 +55,12 @@ export async function cmdTeammate(args: string[]): Promise<void> {
       if (warning.warn) {
         console.warn(`⚠ ${warning.message}`);
       }
+      if (flags['model']) {
+        console.warn(`⚠ Sticky model policy active: ignoring --model and using ${STICKY_TEAMMATE_MODEL}.`);
+      }
       const tm = await spawnTeammate(teamName, sessionId, {
         name,
         agentType: flags['type'] ?? 'coder',
-        model: flags['model'],
         spawnPrompt: flags['prompt'] ?? `You are teammate ${name}.`,
       });
       console.log(`✓ Spawned ${tm.name} (pid: ${tm.pid})`);

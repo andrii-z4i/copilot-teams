@@ -8,12 +8,13 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { updateTeam, loadTeam } from '../team/index.js';
 import type { TeamConfig, TeamMember, MemberStatus } from '../types.js';
+import { STICKY_TEAMMATE_MODEL } from '../constants.js';
 
 // ── Types ──
 
 export interface SpawnOptions {
   name: string;
-  model?: string;
+  model?: string; // Ignored by sticky model policy; retained for backwards compatibility.
   spawnPrompt: string;
   agentType?: string;
 }
@@ -131,9 +132,7 @@ function defaultSpawnCommandBuilder(
     '--allow-all',
   ];
 
-  if (options.model) {
-    args.push('--model', options.model);
-  }
+  args.push('--model', STICKY_TEAMMATE_MODEL);
 
   return {
     command: 'copilot',
@@ -199,12 +198,17 @@ export async function spawnTeammate(
           agentId: `agent-${options.name}-${Date.now()}`,
           agentType: options.agentType ?? 'teammate',
           status: 'spawning' as const,
-          model: options.model,
+          model: STICKY_TEAMMATE_MODEL,
         },
       ],
     }));
   } else {
-    await updateMemberStatus(teamName, leadSessionId, options.name, 'spawning');
+    await updateTeam(teamName, leadSessionId, (config) => ({
+      ...config,
+      members: config.members.map((m) =>
+        m.name === options.name ? { ...m, status: 'spawning' as const, model: STICKY_TEAMMATE_MODEL } : m,
+      ),
+    }));
   }
 
   // Build spawn command

@@ -55,7 +55,15 @@ import {
 } from './permissions/index.js';
 import { loadHooks, saveHooks } from './hooks/index.js';
 import { warnTeamSize } from './utils/cost.js';
-import { TEAMS_BASE_DIR } from './constants.js';
+import {
+  TEAMS_BASE_DIR,
+  STICKY_LEAD_CONTEXT,
+  STICKY_LEAD_MODEL,
+  STICKY_LEAD_REASONING_EFFORT,
+  STICKY_TEAMMATE_CONTEXT,
+  STICKY_TEAMMATE_MODEL,
+  STICKY_TEAMMATE_REASONING_EFFORT,
+} from './constants.js';
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -195,7 +203,10 @@ IMPORTANT:
 - Use spawn_teammate (not your own built-in agents) when the user asks for teammates
 - When the user asks for reports, findings, or results from teammates, use get_all_reports
 - Most tools auto-detect the team name — no need to specify it
-- The user is the Team Lead; all coordination flows through them`,
+- The user is the Team Lead; all coordination flows through them
+- Sticky model policy:
+  - Lead: ${STICKY_LEAD_MODEL} (reasoning: ${STICKY_LEAD_REASONING_EFFORT}, context: ${STICKY_LEAD_CONTEXT})
+  - Teammates: ${STICKY_TEAMMATE_MODEL} (reasoning: ${STICKY_TEAMMATE_REASONING_EFFORT}, context: ${STICKY_TEAMMATE_CONTEXT})`,
   }
 );
 
@@ -288,9 +299,8 @@ server.tool(
     prompt: z.string().max(100_000).describe('Task instructions for the teammate — what should they work on?'),
     team_name: SafeTeamName.optional().describe('Team name (auto-detected)'),
     agent_type: z.enum(['coder', 'reviewer', 'tester']).optional().describe('Agent type (default: coder)'),
-    model: z.string().optional().describe('Model override for this teammate'),
   },
-  async ({ name, prompt, team_name, agent_type, model }) => {
+  async ({ name, prompt, team_name, agent_type }) => {
     if (isTeammate()) {
       return text('Error: This operation is restricted to the Team Lead.');
     }
@@ -301,7 +311,6 @@ server.tool(
     const tm = await spawnTeammate(tn, team.leadSessionId, {
       name,
       agentType: agent_type ?? 'coder',
-      model,
       spawnPrompt: prompt,
     });
     // Audit: log the spawn as a message
@@ -311,6 +320,18 @@ server.tool(
       name: tm.name,
       pid: tm.pid,
       status: 'spawning',
+      modelPolicy: {
+        lead: {
+          model: STICKY_LEAD_MODEL,
+          reasoning_effort: STICKY_LEAD_REASONING_EFFORT,
+          context: STICKY_LEAD_CONTEXT,
+        },
+        teammate: {
+          model: STICKY_TEAMMATE_MODEL,
+          reasoning_effort: STICKY_TEAMMATE_REASONING_EFFORT,
+          context: STICKY_TEAMMATE_CONTEXT,
+        },
+      },
     };
     if (warning.warn) result.costWarning = warning.message;
     return json(result);
