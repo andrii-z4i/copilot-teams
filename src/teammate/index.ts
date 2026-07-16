@@ -8,12 +8,13 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { updateTeam, loadTeam } from '../team/index.js';
 import type { TeamConfig, TeamMember, MemberStatus } from '../types.js';
+import { STICKY_TEAMMATE_MODEL, STICKY_TEAMMATE_REASONING_EFFORT } from '../constants.js';
 
 // ── Types ──
 
 export interface SpawnOptions {
   name: string;
-  model?: string;
+  model?: string; // Ignored by sticky model policy; retained for backwards compatibility.
   spawnPrompt: string;
   agentType?: string;
 }
@@ -131,9 +132,8 @@ function defaultSpawnCommandBuilder(
     '--allow-all',
   ];
 
-  if (options.model) {
-    args.push('--model', options.model);
-  }
+  args.push('--model', STICKY_TEAMMATE_MODEL);
+  args.push('--reasoning-effort', STICKY_TEAMMATE_REASONING_EFFORT);
 
   return {
     command: 'copilot',
@@ -161,6 +161,25 @@ export function resetSpawnCommandBuilder(): void {
 }
 
 // ── Spawn Implementation ──
+
+/**
+ * Strip named flags (and their values) from an args array.
+ * Used to enforce sticky model policy at the last mile before spawn.
+ */
+function stripArgs(args: string[], flags: string[]): string[] {
+  const result: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (flags.includes(args[i])) {
+      if (i + 1 < args.length) {
+        i++; // skip the flag value
+      }
+      // skip the flag itself (don't push to result)
+    } else {
+      result.push(args[i]);
+    }
+  }
+  return result;
+}
 
 async function updateMemberStatus(
   teamName: string,
@@ -199,20 +218,38 @@ export async function spawnTeammate(
           agentId: `agent-${options.name}-${Date.now()}`,
           agentType: options.agentType ?? 'teammate',
           status: 'spawning' as const,
-          model: options.model,
+          model: STICKY_TEAMMATE_MODEL,
         },
       ],
     }));
   } else {
-    await updateMemberStatus(teamName, leadSessionId, options.name, 'spawning');
+    await updateTeam(teamName, leadSessionId, (config) => ({
+      ...config,
+      members: config.members.map((m) =>
+        m.name === options.name ? { ...m, status: 'spawning' as const, model: STICKY_TEAMMATE_MODEL } : m,
+      ),
+    }));
   }
 
   // Build spawn command
-  const { command, args, env: extraEnv } = spawnCommandBuilder(
+  const { command, args: builderArgs, env: extraEnv } = spawnCommandBuilder(
     teamName,
     options,
     loadTeam(teamName),
   );
+
+  // Last-mile: strip any --model / --reasoning-effort overrides from the builder
+  // and re-append the pinned policy values, preventing custom builders from
+  // reintroducing a runtime model override path.
+  // Only applied when the command is 'copilot' (the real spawn target).
+  let args: string[];
+  if (command === 'copilot') {
+    args = stripArgs(builderArgs, ['--model', '--reasoning-effort']);
+    args.push('--model', STICKY_TEAMMATE_MODEL);
+    args.push('--reasoning-effort', STICKY_TEAMMATE_REASONING_EFFORT);
+  } else {
+    args = builderArgs;
+  }
 
   // Spawn child process (TM-4: same cwd/project context)
   const child = spawn(command, args, {

@@ -67,6 +67,13 @@ You: "Shut everyone down and clean up"
 
 That's it. Copilot picks the right MCP tools automatically.
 
+### Sticky model policy
+
+- **Lead:** `gpt-5.6-sol` (reasoning: `max`, context: `1m`)
+- **Teammates:** `gpt-5.2` (reasoning: `max`, context: `default`)
+
+Teammate model overrides are ignored to keep execution consistent and cost-aware.
+
 ---
 
 ## What Can It Do?

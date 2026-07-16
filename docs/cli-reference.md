@@ -387,7 +387,9 @@ Options: `--team-name <name>`, `--session-id <id>`
 | `teammate shutdown <name>` | Graceful shutdown (teammate can negotiate) |
 | `teammate kill <name>` | Force-terminate unresponsive teammate |
 
-Options: `--type <type>`, `--model <model>`, `--prompt <text>`
+Options: `--type <type>`, `--prompt <text>`
+
+> Sticky model policy: teammate model selection is pinned to `gpt-5.2` by the server.
 
 ### `copilot-teams task`
 

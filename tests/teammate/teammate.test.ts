@@ -130,7 +130,7 @@ describe('spawnTeammate', () => {
     expect(output).toContain('GOT: CUSTOM_PROMPT_CONTENT');
   });
 
-  it('model override is applied correctly (TM-3)', async () => {
+  it('sticky model policy pins teammate model', async () => {
     await createTeam({ leadSessionId: 'lead-1', teamName: 'test-team' });
 
     await spawnTeammate('test-team', 'lead-1', {
@@ -142,7 +142,7 @@ describe('spawnTeammate', () => {
     const statuses = getTeammateStatuses('test-team');
     const worker = statuses.find((s) => s.name === 'model-worker');
     expect(worker).toBeDefined();
-    expect(worker!.model).toBe('gpt-4o');
+    expect(worker!.model).toBe(constants.STICKY_TEAMMATE_MODEL);
   });
 
   it('project context (cwd) is inherited by teammate (TM-4)', async () => {

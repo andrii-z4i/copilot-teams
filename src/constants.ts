@@ -57,6 +57,16 @@ export const TEAMMATE_MODES = ['auto', 'in-process', 'tmux'] as const;
 
 export const ENV_TEAMS_ENABLED = 'COPILOT_TEAMS_ENABLED';
 
+// ── Sticky model policy ──
+
+export const STICKY_LEAD_MODEL = 'gpt-5.6-sol';
+export const STICKY_LEAD_REASONING_EFFORT = 'max';
+export const STICKY_LEAD_CONTEXT = '1m';
+
+export const STICKY_TEAMMATE_MODEL = 'gpt-5.2';
+export const STICKY_TEAMMATE_REASONING_EFFORT = 'max';
+export const STICKY_TEAMMATE_CONTEXT = 'default';
+
 // ── Input Validation ──
 
 const SAFE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]*$/i;
